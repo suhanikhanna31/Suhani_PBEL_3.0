@@ -1,4 +1,4 @@
-# PROJECT 14 AI-Based Cyber Threat Detection Framework) Signal: Behavioral & Psycholinguistic Insider-Threat Detection
+# PROJECT 14 (AI-Based Cyber Threat Detection Framework) Signal: Behavioral & Psycholinguistic Insider-Threat Detection
 
 **An AI/ML system that flags insider-risk and account-compromise signals from *how* people communicate internally — not from logs or network traffic.**
 
