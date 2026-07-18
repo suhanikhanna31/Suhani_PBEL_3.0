@@ -1,0 +1,22 @@
+# data
+data/raw/*
+!data/raw/.gitkeep
+data/interim/*
+!data/interim/.gitkeep
+data/processed/*
+!data/processed/.gitkeep
+
+# env
+.env
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+
+# models
+*.pkl
+*.joblib
+src/models/supervised/artifacts/
+src/models/unsupervised/artifacts/
+
+# os
+.DS_Store
