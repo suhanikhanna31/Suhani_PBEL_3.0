@@ -1,0 +1,36 @@
+# Core data / numeric
+pandas
+numpy
+
+# Visualization
+matplotlib
+seaborn
+
+# NLP (kept light per project constraints)
+nltk
+textblob
+textstat
+
+# ML - supervised & unsupervised
+scikit-learn
+xgboost
+joblib
+
+# API
+fastapi
+uvicorn[standard]
+pydantic
+python-multipart
+
+# Config / env
+python-dotenv
+
+# watsonx.ai SDK (optional — code degrades gracefully without it)
+ibm-watsonx-ai
+
+# Testing
+pytest
+httpx
+
+# Notebooks
+jupyter

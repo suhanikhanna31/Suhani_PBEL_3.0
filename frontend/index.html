@@ -1,0 +1,394 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Signal — Behavioral Drift Detection</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+  :root{
+    --bg:#f4f4f4;
+    --surface:#ffffff;
+    --text:#161616;
+    --text-muted:#525252;
+    --border:#e0e0e0;
+    --blue:#0f62fe;
+    --blue-dark:#0043ce;
+    --teal:#007d79;
+    --amber:#f1c21b;
+    --red:#da1e28;
+    --mono:'IBM Plex Mono', monospace;
+    --sans:'IBM Plex Sans', -apple-system, sans-serif;
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  body{
+    background:var(--bg);
+    color:var(--text);
+    font-family:var(--sans);
+    font-size:14px;
+    line-height:1.5;
+  }
+  a{color:var(--blue);}
+
+  header{
+    background:var(--text);
+    color:#fff;
+    padding:20px 32px;
+    display:flex;
+    align-items:baseline;
+    justify-content:space-between;
+    border-bottom:4px solid var(--blue);
+  }
+  header .brand{display:flex; align-items:baseline; gap:12px;}
+  header h1{font-size:18px; font-weight:600; letter-spacing:0.2px;}
+  header .eyebrow{
+    font-family:var(--mono);
+    font-size:11px;
+    color:#a8a8a8;
+    text-transform:uppercase;
+    letter-spacing:0.08em;
+  }
+  header .status{
+    font-family:var(--mono);
+    font-size:12px;
+    color:#a8a8a8;
+    display:flex;
+    align-items:center;
+    gap:8px;
+  }
+  .dot{width:8px; height:8px; border-radius:50%; background:#42be65; display:inline-block;}
+
+  main{max-width:1180px; margin:0 auto; padding:32px;}
+
+  .kpi-row{
+    display:grid;
+    grid-template-columns:repeat(4, 1fr);
+    gap:1px;
+    background:var(--border);
+    border:1px solid var(--border);
+    margin-bottom:32px;
+  }
+  .kpi{background:var(--surface); padding:20px 24px;}
+  .kpi .label{font-size:11px; text-transform:uppercase; letter-spacing:0.06em; color:var(--text-muted); font-family:var(--mono);}
+  .kpi .value{font-size:28px; font-weight:600; margin-top:6px; font-family:var(--mono);}
+  .kpi .value.flag{color:var(--red);}
+
+  .panel{
+    background:var(--surface);
+    border:1px solid var(--border);
+    margin-bottom:24px;
+  }
+  .panel-head{
+    padding:16px 24px;
+    border-bottom:1px solid var(--border);
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+  }
+  .panel-head h2{font-size:15px; font-weight:600;}
+  .panel-head .hint{font-size:12px; color:var(--text-muted);}
+  .panel-body{padding:0;}
+
+  table{width:100%; border-collapse:collapse;}
+  thead th{
+    text-align:left;
+    font-size:11px;
+    text-transform:uppercase;
+    letter-spacing:0.05em;
+    color:var(--text-muted);
+    font-weight:500;
+    padding:10px 24px;
+    border-bottom:1px solid var(--border);
+    font-family:var(--mono);
+  }
+  tbody td{
+    padding:12px 24px;
+    border-bottom:1px solid var(--border);
+    font-size:13px;
+  }
+  tbody tr{cursor:pointer; transition:background 0.1s;}
+  tbody tr:hover{background:#f4f4f4;}
+  tbody tr.selected{background:#edf5ff; border-left:3px solid var(--blue);}
+  .pseudonym{font-family:var(--mono); font-size:12px;}
+  .score-bar-wrap{display:flex; align-items:center; gap:10px;}
+  .score-bar-track{width:80px; height:6px; background:#e0e0e0; position:relative;}
+  .score-bar-fill{height:100%; background:var(--blue);}
+  .score-bar-fill.high{background:var(--red);}
+  .badge{
+    font-family:var(--mono);
+    font-size:10px;
+    padding:2px 8px;
+    border:1px solid currentColor;
+    text-transform:uppercase;
+  }
+  .badge.outlier{color:var(--red);}
+  .badge.normal{color:var(--text-muted);}
+
+  #detail .panel-body{padding:24px;}
+  .empty-state{padding:48px 24px; text-align:center; color:var(--text-muted); font-size:13px;}
+  .empty-state .glyph{font-family:var(--mono); font-size:24px; color:var(--border); margin-bottom:12px;}
+
+  .detail-grid{display:grid; grid-template-columns:1.2fr 1fr; gap:32px;}
+  .detail-meta{display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-bottom:20px;}
+  .detail-meta .item .label{font-size:11px; color:var(--text-muted); font-family:var(--mono); text-transform:uppercase;}
+  .detail-meta .item .value{font-size:18px; font-weight:600; font-family:var(--mono); margin-top:2px;}
+
+  .explanation-box{
+    background:#f4f4f4;
+    border-left:3px solid var(--teal);
+    padding:14px 16px;
+    font-size:13px;
+    color:var(--text);
+    margin-top:16px;
+  }
+  .explanation-box .src{font-family:var(--mono); font-size:10px; text-transform:uppercase; color:var(--teal); margin-bottom:6px; letter-spacing:0.05em;}
+
+  .flag-list{display:flex; flex-wrap:wrap; gap:6px; margin-top:8px;}
+  .flag-chip{
+    font-family:var(--mono);
+    font-size:11px;
+    background:#fff1f1;
+    color:var(--red);
+    padding:3px 8px;
+    border:1px solid #ffd7d9;
+  }
+
+  footer{
+    max-width:1180px; margin:0 auto; padding:24px 32px 48px;
+    font-size:12px; color:var(--text-muted); border-top:1px solid var(--border);
+  }
+  footer a{color:var(--text-muted); text-decoration:underline;}
+
+  canvas{max-height:220px;}
+
+  @media (max-width:820px){
+    .kpi-row{grid-template-columns:repeat(2,1fr);}
+    .detail-grid{grid-template-columns:1fr;}
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="brand">
+    <h1>Signal</h1>
+    <span class="eyebrow">Behavioral drift detection</span>
+  </div>
+  <div class="status"><span class="dot"></span> <span id="pipeline-status">checking pipeline…</span></div>
+</header>
+
+<main>
+
+  <section class="kpi-row" id="kpi-row">
+    <div class="kpi"><div class="label">Users monitored</div><div class="value" id="kpi-users">—</div></div>
+    <div class="kpi"><div class="label">Messages scored</div><div class="value" id="kpi-messages">—</div></div>
+    <div class="kpi"><div class="label">Flagged this period</div><div class="value flag" id="kpi-flagged">—</div></div>
+    <div class="kpi"><div class="label">Structural outliers</div><div class="value" id="kpi-outliers">—</div></div>
+  </section>
+
+  <section class="panel">
+    <div class="panel-head">
+      <h2>Top riskiest users</h2>
+      <span class="hint">Ranked by weighted drift score · pseudonymous IDs only</span>
+    </div>
+    <div class="panel-body">
+      <table>
+        <thead>
+          <tr>
+            <th>Pseudonym</th>
+            <th>Drift score</th>
+            <th>Flagged rate</th>
+            <th>Messages</th>
+            <th>Structure</th>
+          </tr>
+        </thead>
+        <tbody id="risk-table-body">
+          <tr><td colspan="5" class="empty-state">Loading…</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="panel" id="detail">
+    <div class="panel-head">
+      <h2>User detail</h2>
+      <span class="hint" id="detail-hint">Select a user above</span>
+    </div>
+    <div class="panel-body">
+      <div class="empty-state" id="detail-empty">
+        <div class="glyph">◇</div>
+        Click a row in the table to see baseline drift and a plain-language explanation.
+      </div>
+      <div class="detail-grid" id="detail-content" style="display:none;">
+        <div>
+          <canvas id="drift-chart"></canvas>
+        </div>
+        <div>
+          <div class="detail-meta">
+            <div class="item"><div class="label">Avg drift score</div><div class="value" id="d-avg">—</div></div>
+            <div class="item"><div class="label">Max drift score</div><div class="value" id="d-max">—</div></div>
+            <div class="item"><div class="label">Messages</div><div class="value" id="d-messages">—</div></div>
+            <div class="item"><div class="label">Flagged rate</div><div class="value" id="d-rate">—</div></div>
+          </div>
+          <div class="label" style="font-size:11px; color:var(--text-muted); font-family:var(--mono); text-transform:uppercase;">Recently flagged features</div>
+          <div class="flag-list" id="d-flags"></div>
+          <div class="explanation-box">
+            <div class="src">watsonx.ai — plain-language summary</div>
+            <div id="d-explanation">Loading explanation…</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<footer>
+  Pseudonymous by design — no raw usernames or message content leave the pipeline. See
+  <a href="#" onclick="alert('See docs/ETHICS_AND_PRIVACY.md in the project repo.'); return false;">ETHICS_AND_PRIVACY.md</a>
+  for the consent and anonymization design. Every scoring decision is recorded in a tamper-evident audit log
+  (<a href="#" onclick="alert('GET /api/governance/audit-log/verify'); return false;">verify chain</a>).
+</footer>
+
+<script>
+  const API_BASE = '/api';
+  // Dev-only role token — replace with real IAM/session auth before production use.
+  const HEADERS = { 'X-API-Role-Token': 'dev-analyst-token' };
+
+  let riskData = [];
+
+  async function fetchJSON(url, opts={}) {
+    const res = await fetch(url, { headers: HEADERS, ...opts });
+    if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
+    return res.json();
+  }
+
+  function fmt(n, d=2) {
+    if (n === undefined || n === null || Number.isNaN(n)) return '—';
+    return Number(n).toFixed(d);
+  }
+
+  async function loadDashboard() {
+    try {
+      riskData = await fetchJSON(`${API_BASE}/users/risk?k=10`);
+      document.getElementById('pipeline-status').textContent = 'pipeline live';
+
+      const totalMessages = riskData.reduce((a, u) => a + (u.n_messages || 0), 0);
+      const totalFlagged = riskData.reduce((a, u) => a + Math.round((u.flagged_message_rate||0) * (u.n_messages||0)), 0);
+      const outliers = riskData.filter(u => u.is_outlier_cluster).length;
+
+      document.getElementById('kpi-users').textContent = riskData.length;
+      document.getElementById('kpi-messages').textContent = totalMessages;
+      document.getElementById('kpi-flagged').textContent = totalFlagged;
+      document.getElementById('kpi-outliers').textContent = outliers;
+
+      renderTable();
+    } catch (e) {
+      document.getElementById('pipeline-status').textContent = 'pipeline not run — see README';
+      document.getElementById('risk-table-body').innerHTML =
+        `<tr><td colspan="5" class="empty-state">No data yet. Run <code>python -m src.pipeline</code> then reload.</td></tr>`;
+    }
+  }
+
+  function renderTable() {
+    const maxScore = Math.max(...riskData.map(u => u.avg_drift_score), 1);
+    const body = document.getElementById('risk-table-body');
+    body.innerHTML = '';
+    riskData.forEach((u, i) => {
+      const pct = Math.min((u.avg_drift_score / maxScore) * 100, 100);
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td class="pseudonym">${u.user_pseudonym}</td>
+        <td>
+          <div class="score-bar-wrap">
+            <span>${fmt(u.avg_drift_score)}</span>
+            <div class="score-bar-track"><div class="score-bar-fill ${pct>60?'high':''}" style="width:${pct}%"></div></div>
+          </div>
+        </td>
+        <td>${fmt((u.flagged_message_rate||0)*100, 1)}%</td>
+        <td>${u.n_messages}</td>
+        <td><span class="badge ${u.is_outlier_cluster ? 'outlier' : 'normal'}">${u.is_outlier_cluster ? 'outlier' : 'clustered'}</span></td>
+      `;
+      tr.addEventListener('click', () => selectUser(u, tr));
+      body.appendChild(tr);
+    });
+  }
+
+  let chartInstance = null;
+
+  async function selectUser(user, rowEl) {
+    document.querySelectorAll('#risk-table-body tr').forEach(r => r.classList.remove('selected'));
+    rowEl.classList.add('selected');
+
+    document.getElementById('detail-empty').style.display = 'none';
+    document.getElementById('detail-content').style.display = 'grid';
+    document.getElementById('detail-hint').textContent = user.user_pseudonym;
+
+    document.getElementById('d-avg').textContent = fmt(user.avg_drift_score);
+    document.getElementById('d-max').textContent = fmt(user.max_drift_score);
+    document.getElementById('d-messages').textContent = user.n_messages;
+    document.getElementById('d-rate').textContent = fmt((user.flagged_message_rate||0)*100, 1) + '%';
+    document.getElementById('d-explanation').textContent = 'Loading explanation…';
+    document.getElementById('d-flags').innerHTML = '';
+
+    try {
+      const messages = await fetchJSON(`${API_BASE}/drift/messages/${user.user_pseudonym}`);
+      renderChart(messages);
+
+      const flagSet = new Set();
+      messages.slice(-25).forEach(m => {
+        (m.flagged_features || '').toString().split(',').forEach(f => { if (f.trim()) flagSet.add(f.trim()); });
+      });
+      document.getElementById('d-flags').innerHTML = [...flagSet].slice(0, 8)
+        .map(f => `<span class="flag-chip">${f}</span>`).join('') || '<span class="flag-chip" style="color:var(--text-muted); background:#f4f4f4; border-color:var(--border);">none recently</span>';
+    } catch (e) {
+      document.getElementById('d-explanation').textContent = 'Could not load message history.';
+    }
+
+    try {
+      const explain = await fetchJSON(`${API_BASE}/drift/explain/${user.user_pseudonym}`);
+      document.getElementById('d-explanation').textContent = explain.explanation;
+    } catch (e) {
+      document.getElementById('d-explanation').textContent = 'watsonx.ai explanation unavailable.';
+    }
+  }
+
+  function renderChart(messages) {
+    const ctx = document.getElementById('drift-chart').getContext('2d');
+    const labels = messages.map((m, i) => i + 1);
+    const scores = messages.map(m => m.drift_score);
+
+    if (chartInstance) chartInstance.destroy();
+    chartInstance = new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels,
+        datasets: [{
+          label: 'Drift score per message',
+          data: scores,
+          borderColor: '#0f62fe',
+          backgroundColor: 'rgba(15,98,254,0.08)',
+          fill: true,
+          tension: 0.2,
+          pointRadius: 0,
+          borderWidth: 2,
+        }]
+      },
+      options: {
+        responsive: true,
+        plugins: { legend: { display: false } },
+        scales: {
+          x: { display: false },
+          y: { grid: { color: '#e0e0e0' }, ticks: { font: { family: 'IBM Plex Mono', size: 10 } } }
+        }
+      }
+    });
+  }
+
+  loadDashboard();
+</script>
+
+</body>
+</html>
