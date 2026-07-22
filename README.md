@@ -98,6 +98,24 @@ This is where the NASSCOM EDA training and the core Python data stack get put to
 
 Running both side by side isn't redundant — it's a deliberate comparison of two different ensemble philosophies on a class-imbalanced problem, evaluated with AUC, a full classification report, and a confusion matrix, not just accuracy (which is a misleading metric when positives are rare).
 
+### Evaluation metrics
+
+Both classifiers are evaluated on a held-out 25% test split (`train_test_split`,
+stratified by label) that they never see during training. Because insider
+labels are rare, **accuracy alone is misleading** — a model that always predicts
+"not an insider" can still score 90%+ accuracy while catching zero real threats.
+So each run computes and logs:
+
+- **Accuracy** — overall correct predictions
+- **Precision** (insider class) — of everyone flagged, how many were real
+- **Recall** (insider class) — of actual insiders, how many were caught
+- **F1** — the balance of precision and recall
+- **AUC** and a full confusion matrix
+
+Full results for both models are saved to
+`src/models/supervised/artifacts/metrics.json` after every training run, so
+numbers are reproducible without retraining.
+
 ### Unsupervised learning
 
 Ground-truth insider labels only exist here because CERT is a research dataset with synthetic scenarios baked in — a real deployment won't have that luxury. So the system also runs two label-free models, treated as independent signals rather than a fallback:
