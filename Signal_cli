@@ -1,0 +1,255 @@
+#!/usr/bin/env python3
+"""
+signal-cli
+==========
+Command-line interface for the Signal insider-threat detection pipeline
+(Suhani_PBEL_3.0 — IBM watsonx-based behavioral & psycholinguistic
+insider-threat detection).
+
+This CLI is a thin, user-facing wrapper around the existing `src/` package.
+It does not reimplement any scoring, anonymization, or governance logic —
+it imports and calls the real modules so behavior always matches the API
+and dashboard. If a given module isn't importable in the current
+environment, the CLI degrades gracefully and tells you exactly what's
+missing, so the tool is still demoable without every dependency wired up.
+
+Install (from repo root):
+    pip install click rich
+
+Run:
+    python signal_cli.py --help
+
+Suggested commands:
+    signal ingest data/raw/email.csv
+    signal score --user emp_a1b2c3d4e5f6
+    signal top-k --n 10
+    signal explain emp_a1b2c3d4e5f6
+    signal audit verify
+    signal audit tail --n 20
+    signal consent revoke emp_a1b2c3d4e5f6
+"""
+
+import sys
+import importlib
+from datetime import datetime
+
+import click
+from rich.console import Console
+from rich.table import Table
+from rich.panel import Panel
+
+console = Console()
+
+
+# --------------------------------------------------------------------------
+# Soft-import helper: lets the CLI run even if some src/ modules aren't
+# present or configured (e.g. no watsonx credentials in .env).
+# --------------------------------------------------------------------------
+def soft_import(module_path: str):
+    try:
+        return importlib.import_module(module_path)
+    except ModuleNotFoundError:
+        return None
+    except Exception as e:
+        console.print(f"[yellow]Warning:[/yellow] failed to import {module_path}: {e}")
+        return None
+
+
+def require(module, feature_name: str):
+    if module is None:
+        console.print(
+            f"[red]✗[/red] {feature_name} is unavailable — the underlying "
+            f"module could not be imported. Make sure you're running this "
+            f"from the repo root with the venv activated."
+        )
+        sys.exit(1)
+
+
+# --------------------------------------------------------------------------
+# CLI root
+# --------------------------------------------------------------------------
+@click.group()
+def cli():
+    """Signal — behavioral & psycholinguistic insider-threat detection CLI."""
+    pass
+
+
+# --------------------------------------------------------------------------
+# ingest
+# --------------------------------------------------------------------------
+@cli.command()
+@click.argument("csv_path", type=click.Path(exists=True))
+def ingest(csv_path):
+    """Run consent gate + anonymization + feature extraction on a CERT-schema CSV."""
+    pipeline = soft_import("src.pipeline")
+    require(pipeline, "Pipeline ingestion")
+
+    console.print(f"[bold]Ingesting[/bold] {csv_path} ...")
+    with console.status("Running consent gate, anonymization, and feature extraction..."):
+        result = pipeline.run(csv_path)  # expected to return a summary dict
+
+    table = Table(title="Ingestion Summary")
+    table.add_column("Metric")
+    table.add_column("Value", justify="right")
+    for key, value in (result or {}).items():
+        table.add_row(str(key), str(value))
+    console.print(table)
+
+
+# --------------------------------------------------------------------------
+# score
+# --------------------------------------------------------------------------
+@cli.command()
+@click.option("--user", "user_id", required=True, help="Pseudonymized user id, e.g. emp_a1b2c3d4e5f6")
+def score(user_id):
+    """Show drift score, IsolationForest flag, and DBSCAN cluster status for a user."""
+    drift = soft_import("src.features.drift_scoring")
+    iso = soft_import("src.models.unsupervised.isolation_forest")
+    dbscan_mod = soft_import("src.models.unsupervised.dbscan")
+    require(drift, "Drift scoring")
+
+    drift_score = drift.get_user_drift_score(user_id)
+    iso_flag = iso.get_user_anomaly_flag(user_id) if iso else "n/a"
+    cluster = dbscan_mod.get_user_cluster_label(user_id) if dbscan_mod else "n/a"
+
+    panel_text = (
+        f"[bold]User:[/bold] {user_id}\n"
+        f"[bold]Drift score (z-weighted):[/bold] {drift_score}\n"
+        f"[bold]IsolationForest anomaly:[/bold] {iso_flag}\n"
+        f"[bold]DBSCAN cluster:[/bold] {cluster} "
+        f"{'(structural outlier)' if cluster == -1 else ''}"
+    )
+    console.print(Panel(panel_text, title="Risk Signal", border_style="red" if drift_score and drift_score > 2 else "green"))
+
+
+# --------------------------------------------------------------------------
+# top-k
+# --------------------------------------------------------------------------
+@cli.command(name="top-k")
+@click.option("--n", default=10, help="Number of top-risk users to show (default 10).")
+def top_k(n):
+    """Show the top-K riskiest users using the bounded min-heap (O(N log K))."""
+    heap_mod = soft_import("src.dsa.top_k_heap")
+    require(heap_mod, "Top-K heap")
+
+    results = heap_mod.get_top_k_users(k=n)  # expected: list of (user_id, score) tuples
+
+    table = Table(title=f"Top {n} Riskiest Users")
+    table.add_column("Rank", justify="right")
+    table.add_column("User")
+    table.add_column("Risk Score", justify="right")
+    for i, (user_id, user_score) in enumerate(results, start=1):
+        table.add_row(str(i), user_id, f"{user_score:.3f}")
+    console.print(table)
+
+
+# --------------------------------------------------------------------------
+# explain
+# --------------------------------------------------------------------------
+@cli.command()
+@click.argument("user_id")
+def explain(user_id):
+    """Get a plain-language explanation of a flagged user via watsonx.ai."""
+    watsonx_client = soft_import("src.models.watsonx.client")
+    if watsonx_client is None:
+        console.print(
+            "[yellow]watsonx.ai is not configured.[/yellow] Local scoring still "
+            "works without it — this command only adds a natural-language layer."
+        )
+        return
+
+    with console.status(f"Asking watsonx.ai to explain drift for {user_id}..."):
+        explanation = watsonx_client.explain_drift(user_id)
+
+    console.print(Panel(explanation, title=f"watsonx.ai explanation — {user_id}", border_style="cyan"))
+
+
+# --------------------------------------------------------------------------
+# audit
+# --------------------------------------------------------------------------
+@cli.group()
+def audit():
+    """Inspect and verify the tamper-evident, hash-chained audit log."""
+    pass
+
+
+@audit.command()
+def verify():
+    """Verify the integrity of the hash chain end to end."""
+    audit_log = soft_import("src.governance.audit_log")
+    require(audit_log, "Audit log")
+
+    with console.status("Walking the hash chain..."):
+        ok, broken_at = audit_log.verify_chain()
+
+    if ok:
+        console.print("[bold green]✓ Audit chain intact[/bold green] — no tampering detected.")
+    else:
+        console.print(
+            f"[bold red]✗ Audit chain broken[/bold red] at entry index {broken_at}. "
+            f"Possible retroactive edit or deletion."
+        )
+
+
+@audit.command()
+@click.option("--n", default=20, help="Number of most recent entries to show.")
+def tail(n):
+    """Show the most recent N audit log entries."""
+    audit_log = soft_import("src.governance.audit_log")
+    require(audit_log, "Audit log")
+
+    entries = audit_log.get_recent_entries(n=n)
+
+    table = Table(title=f"Last {n} Audit Log Entries")
+    table.add_column("Timestamp")
+    table.add_column("Event")
+    table.add_column("User (pseudonymized)")
+    for entry in entries:
+        table.add_row(
+            entry.get("timestamp", "-"),
+            entry.get("event_type", "-"),
+            entry.get("user_id", "-"),
+        )
+    console.print(table)
+
+
+# --------------------------------------------------------------------------
+# consent
+# --------------------------------------------------------------------------
+@cli.group()
+def consent():
+    """Manage per-user consent records (consent-gated by default)."""
+    pass
+
+
+@consent.command()
+@click.argument("user_id")
+def revoke(user_id):
+    """Revoke a user's consent — removes them from the feature pipeline immediately."""
+    consent_mod = soft_import("src.governance.consent")
+    require(consent_mod, "Consent management")
+
+    confirm = click.confirm(
+        f"Revoke consent for '{user_id}'? Their data will stop entering the pipeline immediately."
+    )
+    if not confirm:
+        console.print("Cancelled.")
+        return
+
+    consent_mod.revoke_consent(user_id)
+    console.print(f"[green]✓[/green] Consent revoked for {user_id} at {datetime.now().isoformat(timespec='seconds')}")
+
+
+@consent.command()
+@click.argument("user_id")
+def grant(user_id):
+    """Grant/activate consent for a user."""
+    consent_mod = soft_import("src.governance.consent")
+    require(consent_mod, "Consent management")
+
+    consent_mod.grant_consent(user_id)
+    console.print(f"[green]✓[/green] Consent active for {user_id}")
+
+
+if __name__ == "__main__":
+    cli()
