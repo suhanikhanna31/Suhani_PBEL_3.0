@@ -5,7 +5,7 @@
 Built for an IBM internship using watsonx.ai, watsonx Assistant, and watsonx.governance, with a full supervised + unsupervised ML pipeline, custom-optimized data structures, and a privacy-first design throughout.
 
 ---
-
+> **Quick start:** `pip install -r requirements.txt && uvicorn src.api.app:app --reload` → open http://localhost:8000
 ## The idea
 
 Most insider-threat tooling watches *what* people access — file transfers, login anomalies, badge swipes. This project watches *how* people write.
