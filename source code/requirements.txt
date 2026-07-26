@@ -6,15 +6,25 @@ numpy
 matplotlib
 seaborn
 
-# NLP (kept light per project constraints)
+# NLP
+# Primary: transformer-based sentiment (Hugging Face) + spaCy POS tagging —
+# the model-driven stack an IBM AI internship project should show off.
+transformers
+torch
+spacy
+# en_core_web_sm isn't pip-installable by name; after `pip install -r requirements.txt` run:
+#   python -m spacy download en_core_web_sm
+textstat
+# Fallbacks only — used automatically if transformers/spaCy models aren't available
+# (e.g. no internet access to fetch weights). Safe to leave installed.
 nltk
 textblob
-textstat
 
 # ML - supervised & unsupervised
 scikit-learn
 xgboost
 joblib
+shap
 
 # API
 fastapi
