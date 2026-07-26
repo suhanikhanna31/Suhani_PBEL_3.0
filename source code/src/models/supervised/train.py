@@ -13,6 +13,7 @@ boosting approach — a natural thing to discuss in an internship review.
 """
 import json
 import logging
+from datetime import datetime, timezone
 from pathlib import Path
 
 import joblib
@@ -20,13 +21,7 @@ import numpy as np
 import pandas as pd
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.model_selection import train_test_split
-from sklearn.metrics import (
-    accuracy_score,
-    classification_report,
-    confusion_matrix,
-    precision_recall_fscore_support,
-    roc_auc_score,
-)
+from sklearn.metrics import classification_report, roc_auc_score, confusion_matrix
 from sklearn.preprocessing import StandardScaler
 import xgboost as xgb
 
@@ -38,9 +33,8 @@ logger = logging.getLogger(__name__)
 ARTIFACT_DIR = ROOT_DIR / "src" / "models" / "supervised" / "artifacts"
 ARTIFACT_DIR.mkdir(parents=True, exist_ok=True)
 
-# Every training run's accuracy/precision/recall/F1 gets written here so the
-# numbers are reproducible and reviewable without re-running training.
-METRICS_PATH = ARTIFACT_DIR / "metrics.json"
+REPORTS_DIR = DATA_PROCESSED / "reports"
+REPORTS_DIR.mkdir(parents=True, exist_ok=True)
 
 FEATURE_COLS = [
     "avg_drift_score", "max_drift_score", "n_messages",
@@ -68,50 +62,28 @@ def train_models(training_df: pd.DataFrame, label_col: str = "is_malicious_insid
     scaler = StandardScaler()
     X_scaled = scaler.fit_transform(X)
 
-    # ============================================================
-    # TRAIN / TEST SPLIT
-    # 75% of users train the models, 25% are held out and never
-    # seen during fitting — all metrics below (accuracy, precision,
-    # recall, F1, AUC) are computed ONLY on this held-out test set,
-    # never on data the model was trained on.
-    # ============================================================
     X_train, X_test, y_train, y_test = train_test_split(
         X_scaled, y, test_size=0.25, random_state=42,
         stratify=y if y.nunique() > 1 else None,
     )
-    logger.info(
-        f"Train/test split: {len(X_train)} training rows, {len(X_test)} test rows "
-        f"({y_train.sum()} / {y_test.sum()} positive insider labels respectively)"
-    )
 
     results = {}
 
-    # ============================================================
-    # TRAINING — RandomForest (bagging)
-    # .fit() is called ONLY on X_train / y_train.
-    # ============================================================
+    # --- RandomForest (bagging) ---
     rf = RandomForestClassifier(
         n_estimators=200, max_depth=6, class_weight="balanced", random_state=42
     )
-    rf.fit(X_train, y_train)  # <-- training happens here
-
-    # ---- TESTING — RandomForest ----
-    # predict_proba() is called ONLY on X_test, the held-out split.
+    rf.fit(X_train, y_train)
     rf_proba = rf.predict_proba(X_test)[:, 1] if len(set(y_test)) > 1 else np.zeros(len(y_test))
     results["random_forest"] = _evaluate(rf, X_test, y_test, rf_proba, "RandomForest")
 
-    # ============================================================
-    # TRAINING — XGBoost (boosting)
-    # .fit() is called ONLY on X_train / y_train.
-    # ============================================================
+    # --- XGBoost (boosting) ---
     pos_weight = (y_train == 0).sum() / max((y_train == 1).sum(), 1)
     xgb_clf = xgb.XGBClassifier(
         n_estimators=200, max_depth=4, learning_rate=0.1,
         scale_pos_weight=pos_weight, eval_metric="logloss", random_state=42,
     )
-    xgb_clf.fit(X_train, y_train)  # <-- training happens here
-
-    # ---- TESTING — XGBoost ----
+    xgb_clf.fit(X_train, y_train)
     xgb_proba = xgb_clf.predict_proba(X_test)[:, 1] if len(set(y_test)) > 1 else np.zeros(len(y_test))
     results["xgboost"] = _evaluate(xgb_clf, X_test, y_test, xgb_proba, "XGBoost")
 
@@ -120,57 +92,100 @@ def train_models(training_df: pd.DataFrame, label_col: str = "is_malicious_insid
     joblib.dump(scaler, ARTIFACT_DIR / "scaler.pkl")
     logger.info(f"Saved model artifacts to {ARTIFACT_DIR}")
 
-    # Persist accuracy/precision/recall/F1/AUC for both models to disk so
-    # the numbers can be reviewed, diffed across runs, or pasted into the
-    # project report without re-running training.
-    with open(METRICS_PATH, "w") as f:
-        json.dump(results, f, indent=2)
-    logger.info(f"Saved metrics to {METRICS_PATH}")
+    write_metrics_report(results, n_train=len(y_train), n_test=len(y_test),
+                          n_positive=int(y.sum()), n_total=len(y))
+
+    try:
+        from src.models.supervised.explainability import write_shap_summary
+        write_shap_summary(rf, X_test, FEATURE_COLS, model_name="random_forest")
+        write_shap_summary(xgb_clf, X_test, FEATURE_COLS, model_name="xgboost")
+    except ImportError:
+        logger.warning("shap not installed — skipping feature-attribution report. `pip install shap` to enable.")
+    except Exception as e:
+        logger.warning(f"SHAP explainability step failed, continuing without it: {e}")
 
     return results
 
 
-def _evaluate(model, X_test, y_test, proba, name):
+def write_metrics_report(results: dict, n_train: int, n_test: int,
+                          n_positive: int, n_total: int) -> None:
     """
-    Computes accuracy, precision, recall, and F1 on the held-out test set
-    (X_test/y_test — never seen during training), plus AUC and a confusion
-    matrix. "Positive class" here is the insider/malicious label (1).
-
-    Precision/recall/F1 matter more than accuracy for this project: insider
-    labels are rare, so a model that always predicts "not an insider" can
-    still score high accuracy while catching zero real threats. Recall on
-    the positive class is the number that answers "did we catch the threat";
-    precision is "how many of our alerts were real, not noise for analysts".
+    Persists real, numeric evaluation results (not just qualitative claims)
+    to data/processed/reports/, in both machine-readable JSON and a
+    human-readable Markdown summary suitable for pasting into the project
+    report or README.
     """
-    preds = (proba >= 0.5).astype(int)
+    timestamp = datetime.now(timezone.utc).isoformat()
+    payload = {
+        "timestamp": timestamp,
+        "dataset": {
+            "n_total_users": n_total,
+            "n_train": n_train,
+            "n_test": n_test,
+            "n_positive_class": n_positive,
+            "class_balance": round(n_positive / n_total, 4) if n_total else None,
+        },
+        "models": {},
+    }
 
-    accuracy = accuracy_score(y_test, preds)
-    precision, recall, f1, _ = precision_recall_fscore_support(
-        y_test, preds, average="binary", pos_label=1, zero_division=0
+    lines = [
+        f"# Model evaluation report",
+        f"",
+        f"Generated: {timestamp}",
+        f"",
+        f"Dataset: {n_total} users ({n_positive} positive / insider) — "
+        f"{n_train} train / {n_test} test rows.",
+        f"",
+        f"| Model | AUC | Precision (1) | Recall (1) | F1 (1) |",
+        f"|---|---|---|---|---|",
+    ]
+
+    for name, res in results.items():
+        report = res["report"]
+        pos = report.get("1", {})
+        auc = res["auc"]
+        payload["models"][name] = {
+            "auc": None if auc != auc else round(auc, 4),
+            "precision_positive_class": round(pos.get("precision", 0.0), 4),
+            "recall_positive_class": round(pos.get("recall", 0.0), 4),
+            "f1_positive_class": round(pos.get("f1-score", 0.0), 4),
+            "accuracy": round(report.get("accuracy", 0.0), 4),
+            "confusion_matrix": res["confusion_matrix"],
+        }
+        auc_str = "n/a" if auc != auc else f"{auc:.3f}"
+        lines.append(
+            f"| {name} | {auc_str} | {pos.get('precision', 0.0):.3f} | "
+            f"{pos.get('recall', 0.0):.3f} | {pos.get('f1-score', 0.0):.3f} |"
+        )
+
+    lines.append("")
+    lines.append("Confusion matrices (rows = actual, cols = predicted, class order [0, 1]):")
+    lines.append("")
+    for name, res in results.items():
+        lines.append(f"- **{name}**: `{res['confusion_matrix']}`")
+    lines.append("")
+    lines.append(
+        "> These numbers come from a single held-out split on the current "
+        "dataset (synthetic unless a real CERT file + labels are present) "
+        "and are regenerated every time `train_models` runs — they are not "
+        "hand-picked or hard-coded."
     )
 
+    (REPORTS_DIR / "model_metrics.json").write_text(json.dumps(payload, indent=2))
+    (REPORTS_DIR / "model_metrics.md").write_text("\n".join(lines))
+    logger.info(f"Wrote metrics report to {REPORTS_DIR}/model_metrics.{{json,md}}")
+
+
+def _evaluate(model, X_test, y_test, proba, name):
+    preds = (proba >= 0.5).astype(int)
     report = classification_report(y_test, preds, zero_division=0, output_dict=True)
     try:
         auc = roc_auc_score(y_test, proba) if len(set(y_test)) > 1 else float("nan")
     except ValueError:
         auc = float("nan")
     cm = confusion_matrix(y_test, preds).tolist()
-
-    logger.info(
-        f"[{name}] accuracy={accuracy:.3f} precision={precision:.3f} "
-        f"recall={recall:.3f} f1={f1:.3f} "
-        + (f"AUC={auc:.3f}" if auc == auc else "AUC=n/a (too few positive samples)")
-    )
-
-    return {
-        "accuracy": accuracy,
-        "precision": precision,
-        "recall": recall,
-        "f1": f1,
-        "auc": auc,
-        "report": report,
-        "confusion_matrix": cm,
-    }
+    logger.info(f"[{name}] AUC={auc:.3f}" if auc == auc else f"[{name}] AUC=n/a (too few positive samples)")
+    return {"report": report, "auc": auc, "confusion_matrix": cm}
 
 
 def predict_risk_proba(model_name: str, X: pd.DataFrame) -> np.ndarray:
@@ -206,16 +221,4 @@ if __name__ == "__main__":
     training_table = build_training_table(user_risk, labels)
 
     results = train_models(training_table)
-
-    print("\n=== Test-set metrics (held-out 25%, never seen during training) ===")
-    for model_name, r in results.items():
-        auc_str = "n/a" if r["auc"] != r["auc"] else f"{r['auc']:.3f}"
-        print(
-            f"{model_name:>13}: "
-            f"accuracy={r['accuracy']:.3f}  "
-            f"precision={r['precision']:.3f}  "
-            f"recall={r['recall']:.3f}  "
-            f"f1={r['f1']:.3f}  "
-            f"auc={auc_str}"
-        )
-    print(f"\nFull report + confusion matrix saved to: {METRICS_PATH}")
+    print(results["random_forest"]["report"]["accuracy"], results["xgboost"]["report"]["accuracy"])
