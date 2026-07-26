@@ -68,17 +68,6 @@ def explain_drift(user_pseudonym: str, drift_summary: dict) -> Optional[str]:
        "n_flagged_messages": 4, "n_messages": 87}
     Returns a short natural-language explanation, or None if watsonx isn't configured.
     """
-    # --- MOCK BYPASS TO LET IT BE CLEANLY ---
-    # Delete or comment out these lines below if you want to try the real API call again!
-    features = ", ".join(drift_summary.get('flagged_features', [])) or 'none'
-    return (
-        f"Drift Analysis for {user_pseudonym}: The user exhibits a distinct linguistic shift "
-        f"with an average drift score of {drift_summary.get('avg_drift_score')}. Features tracking "
-        f"[{features}] crossed historical baselines in {drift_summary.get('n_flagged_messages')} "
-        f"messages. This is a statistical anomaly flag for analyst review, not a confirmation of policy violation."
-    )
-    # ----------------------------------------
-
     model = _get_model()
     if model is None:
         logger.info("watsonx.ai not configured (missing API key/project id) — skipping explanation.")
