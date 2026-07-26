@@ -9,15 +9,8 @@ or on a schedule in production.
 import logging
 import pandas as pd
 
-# --- FIX: Global SSL bypass for NLTK dataset downloads ---
-import ssl
-try:
-    _create_unverified_https_context = ssl._create_unverified_context
-except AttributeError:
-    pass
-else:
-    ssl._create_default_https_context = _create_unverified_https_context
-# ---------------------------------------------------------
+from src.utils import allow_unverified_ssl_for_nltk_downloads
+allow_unverified_ssl_for_nltk_downloads()
 
 from src.config import DATA_PROCESSED
 from src.data.ingest import load_email_data, load_insider_labels
@@ -29,6 +22,8 @@ from src.features.baseline_engine import BaselineEngine
 from src.features.drift_scoring import score_drift_df, aggregate_user_risk
 from src.models.unsupervised.anomaly_detection import fit_isolation_forest, fit_dbscan_clusters
 from src.governance.audit_log import log_event
+from src.governance.bias_audit import audit_drift_by_style_proxy
+from src.governance.openscale_monitor import build_monitor_snapshot, compare_to_previous_snapshot
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -70,6 +65,28 @@ def run_pipeline() -> dict:
             row["user"],
             {"avg_drift_score": row["avg_drift_score"], "flagged_message_rate": row["flagged_message_rate"]},
         )
+
+    # Governance addenda: a per-run fairness check on writing-style proxies,
+    # and an org-wide monitoring snapshot (feature-distribution drift over
+    # time, independent of any single user) — see governance/bias_audit.py
+    # and governance/openscale_monitor.py for what each actually checks.
+    try:
+        bias_report = audit_drift_by_style_proxy(scored)
+        if bias_report["proxies_with_disparity_over_1_5x"]:
+            logger.warning(
+                f"Bias audit flagged possible disparity in: "
+                f"{bias_report['proxies_with_disparity_over_1_5x']} — see data/processed/reports/bias_audit.md"
+            )
+    except Exception as e:
+        logger.warning(f"Bias audit step failed, continuing without it: {e}")
+
+    try:
+        snapshot = build_monitor_snapshot(scored, user_with_clusters)
+        comparison = compare_to_previous_snapshot(snapshot)
+        if comparison["alerts"]:
+            logger.warning(f"Monitoring snapshot flagged org-wide feature drift: {comparison['alerts']}")
+    except Exception as e:
+        logger.warning(f"Monitoring snapshot step failed, continuing without it: {e}")
 
     logger.info(f"=== Pipeline run complete: {len(scored)} messages, {len(user_risk)} users ===")
     return {

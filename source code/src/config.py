@@ -39,6 +39,18 @@ BASELINE_WINDOW_SIZE = int(os.getenv("BASELINE_WINDOW_SIZE", "30"))   # rolling 
 DRIFT_Z_THRESHOLD = float(os.getenv("DRIFT_Z_THRESHOLD", "2.5"))      # z-score flagged as drift
 TOP_K_RISKIEST = int(os.getenv("TOP_K_RISKIEST", "10"))
 
+# ---- Ingestion scale controls ----
+# The real CERT r4.2 email.csv is multiple GB / ~2.6M rows. Loading that
+# with a single pd.read_csv() call reads the *entire* file (including the
+# full-text `content` column) into memory before anything else can happen,
+# which is what freezes a laptop. To keep this project runnable on
+# consumer hardware, ingestion streams the file in chunks and keeps only a
+# bounded, reproducible sample — it never materializes the full file in
+# memory. Raise MAX_INGEST_ROWS (and give the process more RAM) if you
+# want to work with more data than this.
+MAX_INGEST_ROWS = int(os.getenv("MAX_INGEST_ROWS", "10000"))
+INGEST_CHUNK_SIZE = int(os.getenv("INGEST_CHUNK_SIZE", "50000"))
+
 # ---- API ----
 API_HOST = os.getenv("API_HOST", "0.0.0.0")
 API_PORT = int(os.getenv("API_PORT", "8000"))
