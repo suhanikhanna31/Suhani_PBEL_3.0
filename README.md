@@ -87,7 +87,7 @@ This is where the NASSCOM EDA training and the core Python data stack get put to
 - **numpy** underpins the statistical core: the sliding-window baseline engine computes running mean/variance incrementally (see DSA section below), and every feature extractor — sentiment scores, z-scores, drift scores — is numeric array math under the hood.
 - **matplotlib** and **seaborn** drive the two exploratory notebooks (`notebooks/01_eda.ipynb`, `notebooks/02_feature_exploration.ipynb`): message-volume time series, per-user activity distributions, message-length histograms, and — the key validation plot — a boxplot comparing average drift scores between normal and ground-truth-insider users, which is the empirical check on whether the entire linguistic-drift hypothesis actually holds on this data before trusting it operationally.
 - **scikit-learn** provides `StandardScaler`, `train_test_split`, `RandomForestClassifier`, `IsolationForest`, `DBSCAN`, and the full classification-report/AUC/confusion-matrix evaluation stack.
-- **NLTK** and **TextBlob** do the lightweight NLP (POS tagging, sentiment) — deliberately kept light per the project's own constraint, rather than reaching for a heavyweight transformer stack that would be harder to explain, audit, or run cheaply at message-level scale.
+- **Hugging Face `transformers`** (DistilBERT fine-tuned on SST-2) does sentiment scoring, and **spaCy** (`en_core_web_sm`) does POS tagging for stylometry — model-driven NLP rather than a hand-built lexicon, with NLTK/TextBlob kept in as automatic fallbacks if a model can't be downloaded (e.g. offline/CI).
 
 ### Supervised learning
 
@@ -97,24 +97,6 @@ This is where the NASSCOM EDA training and the core Python data stack get put to
 - **XGBoost** (boosting, `scale_pos_weight` tuned the same way)
 
 Running both side by side isn't redundant — it's a deliberate comparison of two different ensemble philosophies on a class-imbalanced problem, evaluated with AUC, a full classification report, and a confusion matrix, not just accuracy (which is a misleading metric when positives are rare).
-
-### Evaluation metrics
-
-Both classifiers are evaluated on a held-out 25% test split (`train_test_split`,
-stratified by label) that they never see during training. Because insider
-labels are rare, **accuracy alone is misleading** — a model that always predicts
-"not an insider" can still score 90%+ accuracy while catching zero real threats.
-So each run computes and logs:
-
-- **Accuracy** — overall correct predictions
-- **Precision** (insider class) — of everyone flagged, how many were real
-- **Recall** (insider class) — of actual insiders, how many were caught
-- **F1** — the balance of precision and recall
-- **AUC** and a full confusion matrix
-
-Full results for both models are saved to
-`src/models/supervised/artifacts/metrics.json` after every training run, so
-numbers are reproducible without retraining.
 
 ### Unsupervised learning
 
@@ -172,10 +154,12 @@ insider-threat-nlp/
 │   ├── features/                  Linguistic + stylometric extraction, baseline engine, drift scoring
 │   ├── dsa/                       Sliding window, Aho-Corasick, top-K heap, LRU cache
 │   ├── models/
-│   │   ├── supervised/            RandomForest + XGBoost training
+│   │   ├── supervised/            RandomForest + XGBoost training, metrics report, SHAP explainability
 │   │   ├── unsupervised/          IsolationForest + DBSCAN
 │   │   └── watsonx/                watsonx.ai client
-│   ├── governance/                Consent, anonymization, audit log, access control
+│   ├── governance/                Consent, anonymization, audit log, access control,
+│   │                              bias/fairness audit, OpenScale-style monitoring
+│   ├── integrations/              QRadar (SIEM) CEF export stub
 │   ├── api/                       FastAPI app + routes (users, drift, assistant, governance)
 │   └── pipeline.py                End-to-end orchestrator
 ├── frontend/                      Analyst dashboard (FastAPI-served static HTML/JS)
@@ -183,6 +167,8 @@ insider-threat-nlp/
 ├── deployment/                    Dockerfile + IBM Cloud Code Engine deploy guide
 ├── docs/                          Architecture + Ethics/Privacy design docs
 └── tests/                         17 unit tests across DSA, drift scoring, anonymization
+
+(CI workflow lives at the repo root: .github/workflows/ci.yml)
 ```
 
 ## Running it
@@ -199,6 +185,85 @@ pytest tests/                                              # 17 tests
 ```
 
 No real dataset required to see it run — `src/data/synthetic_cert_data.py` generates CERT-schema data with a simulated pre-incident drift pattern, so the whole pipeline (features → baselines → drift scoring → unsupervised models → supervised training → dashboard) is demonstrable immediately. Drop the real [CERT Insider Threat dataset](https://kaggle.com/datasets/nitishabharathi/cert-insider-threat) into `data/raw/email.csv` to switch to real data with no code changes.
+
+## Model evaluation (real numbers, regenerated every run)
+
+`python -m src.models.supervised.train` now writes actual metrics — not
+just a qualitative description — to
+`data/processed/reports/model_metrics.{json,md}` on every run: AUC,
+precision/recall/F1 for the positive class, and the confusion matrix for
+both RandomForest and XGBoost. A feature-attribution report (via SHAP) is
+also written to `shap_importance_{model}.{json,png}`, showing which
+aggregated per-user features (`avg_drift_score`, `flagged_message_rate`,
+etc.) actually drove each classifier's prediction — a second, independent
+explanation layer alongside the drift score's own per-feature breakdown.
+
+**Read the numbers honestly, not optimistically.** On the default
+synthetic run (60 users, ~5% simulated insiders → 3 positive users total,
+15 in the test split), RandomForest scores a clean AUC of 1.0 and XGBoost
+scores 0.5 — both numbers are close to meaningless with a single positive
+example in the test fold; they say more about the tiny synthetic
+population than about either algorithm. This is exactly the kind of
+result a larger, real dataset is needed to make trustworthy, and the
+report is deliberately not hand-edited to hide that.
+
+## Bias / fairness audit and ongoing monitoring
+
+Two governance additions close gaps the ethics doc named but never
+actually checked:
+
+- **`src/governance/bias_audit.py`** — since no real demographic data ever
+  enters this privacy-minimized pipeline, this checks flagged-rate and
+  drift-score disparity across writing-style *proxies* (avg word length,
+  lexical diversity, readability) as an always-runnable first pass. It
+  is explicitly documented as a proxy check, not a substitute for a real
+  fairness review with actual protected-attribute data — see the module
+  docstring and `docs/ETHICS_AND_PRIVACY.md`.
+- **`src/governance/openscale_monitor.py`** — a lightweight,
+  watsonx.OpenScale-style monitoring snapshot: org-wide feature-distribution
+  drift and aggregate risk stats over time (distinct from the per-user
+  drift the core pipeline already computes), appended to a JSONL history
+  file after every pipeline run so successive runs are comparable.
+
+Both run automatically as part of `python -m src.pipeline` and write to
+`data/processed/reports/`.
+
+## SIEM integration (IBM QRadar) — export stub
+
+`src/integrations/qradar_export.py` converts flagged users into CEF
+(Common Event Format) event strings — the format QRadar and most SIEMs
+ingest over syslog — so this signal could sit alongside the log/network
+alerts a SOC analyst already triages, instead of living only in a
+second, easy-to-ignore dashboard. This is an honestly-labeled
+**integration stub**: it produces valid CEF lines but does not open a
+network connection to a live QRadar instance, since no real QRadar
+credentials/log source are available in this environment. Wiring
+`send_to_qradar` up to a real syslog listener is a small, well-scoped
+next step once one exists.
+
+## Continuous integration
+
+`.github/workflows/ci.yml` runs on every push/PR: installs dependencies,
+runs the 17-test suite, smoke-tests the full synthetic pipeline and
+supervised training end-to-end, and uploads the generated evaluation/
+governance reports as build artifacts — so "the tests pass" is verified
+automatically rather than only asserted in this README.
+
+## Handling datasets far larger than a laptop can hold
+
+Earlier development runs against the real CERT r4.2 `email.csv`
+(~2.6M rows, several GB once parsed, since it includes full message
+text) would freeze on a single `pd.read_csv()` call, because pandas
+parses and allocates the *entire* file before anything downstream can
+run. `src/data/ingest.py` now streams the file in chunks
+(`pd.read_csv(..., chunksize=...)`) and keeps a fixed-size, uniformly
+random sample via reservoir sampling (Algorithm R), so peak memory is
+bounded by one chunk plus the sample — never the whole file. The default
+cap is `MAX_INGEST_ROWS = 10000` (tunable via `.env` or
+`load_email_data(max_rows=...)`), which is comfortably enough data for
+per-user baselines and drift scoring without needing gigabytes of RAM.
+On a synthetic 500k-row / 155MB test file, this sampled 10,000 rows in
+~1.5s at ~120MB peak RSS instead of loading the whole file first.
 
 ## Deployment status
 
