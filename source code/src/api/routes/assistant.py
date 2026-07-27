@@ -68,3 +68,31 @@ def assistant_webhook(query: AssistantQuery, x_webhook_secret: str = Header(defa
         }
 
     return {"assistant_response": f"Unrecognized intent '{query.intent}'."}
+
+
+class AskQuery(BaseModel):
+    question: str
+    k: int = 4
+
+
+@router.post("/ask")
+def assistant_ask(query: AskQuery, x_webhook_secret: str = Header(default=None)):
+    """
+    Open-ended RAG endpoint, complementary to /webhook's structured
+    intents above. Where /webhook answers questions about *risk data*
+    ("who's riskiest right now"), /ask answers questions about *how the
+    system itself works* — consent, anonymization, audit logging,
+    architecture — retrieved from this project's own docs/audit log
+    (src/governance/rag.py) rather than the risk data itself. Same auth
+    as /webhook for now; a dashboard-facing UI would sit this behind
+    proper session auth instead of the shared secret.
+    """
+    _verify_secret(x_webhook_secret)
+
+    from src.governance.rag import answer_question
+    result = answer_question(query.question, k=query.k)
+    return {
+        "assistant_response": result["answer"],
+        "sources": result["sources"],
+        "watsonx_generated": result["watsonx_generated"],
+    }

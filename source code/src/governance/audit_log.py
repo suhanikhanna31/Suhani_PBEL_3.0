@@ -97,7 +97,24 @@ def verify_chain() -> bool:
     return True
 
 
+def get_recent_entries(n: int = 20) -> list:
+    """
+    Return the most recent `n` log entries (oldest to newest), each with its
+    'entry_hash'/'prev_hash' bookkeeping fields intact. Used by `signal audit
+    tail` (src/api CLI) and by src/governance/rag.py, which folds recent
+    entries into its retrieval corpus so an analyst can ask natural-language
+    questions like "was anything unusual logged recently?" and get an answer
+    grounded in the real audit trail, not just the static docs.
+    """
+    if not AUDIT_LOG_PATH.exists():
+        return []
+    with open(AUDIT_LOG_PATH, "r") as f:
+        lines = [line for line in f if line.strip()]
+    return [json.loads(line) for line in lines[-n:]]
+
+
 if __name__ == "__main__":
     log_event("drift_flagged", "emp_abc123", {"drift_score": 3.2, "flagged_features": ["urgency_score"]})
     log_event("model_prediction", "emp_abc123", {"model": "random_forest", "risk_proba": 0.81})
     print("Chain valid:", verify_chain())
+    print("Recent entries:", get_recent_entries(n=5))

@@ -124,6 +124,43 @@ def classify_message_risk(message_text: str) -> Optional[dict]:
         return None
 
 
+def answer_with_context(question: str, context_chunks: list) -> Optional[str]:
+    """
+    RAG grounding step for src/governance/rag.py. Given a question and a
+    list of {"source": ..., "text": ...} chunks already retrieved by
+    rag.retrieve() (TF-IDF, not this module's concern), ask watsonx.ai to
+    answer using *only* that retrieved context — not its own general
+    knowledge — and to say so plainly if the context doesn't actually
+    answer the question, rather than guessing. Returns None if watsonx
+    isn't configured, so callers can fall back to showing the raw
+    retrieved passages instead (see rag._fallback_answer).
+    """
+    model = _get_model()
+    if model is None:
+        logger.info("watsonx.ai not configured (missing API key/project id) — skipping RAG generation.")
+        return None
+
+    context_block = "\n\n".join(
+        f"[Source: {c['source']}]\n{c['text']}" for c in context_chunks
+    )
+    prompt = (
+        "You are answering a security analyst's question about how this "
+        "insider-threat detection system itself works — its privacy design, "
+        "architecture, or audit trail. Answer using ONLY the context passages "
+        "below. If the passages don't actually contain the answer, say so "
+        "plainly rather than guessing or using outside knowledge. Keep the "
+        "answer to 2-4 sentences and cite which source(s) you drew from.\n\n"
+        f"Context:\n{context_block}\n\n"
+        f"Question: {question}\n\nAnswer:"
+    )
+    try:
+        response = model.generate_text(prompt=prompt)
+        return response.strip() if isinstance(response, str) else str(response)
+    except Exception as e:
+        logger.error(f"watsonx.ai call failed: {e}")
+        return None
+
+
 if __name__ == "__main__":
     print("WATSONX_ENABLED:", WATSONX_ENABLED)
     if WATSONX_ENABLED:
