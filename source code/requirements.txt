@@ -8,10 +8,11 @@ seaborn
 
 # NLP
 # Primary: transformer-based sentiment (Hugging Face) + spaCy POS tagging —
-# the model-driven stack an IBM AI internship project should show off.
-transformers
-torch
-spacy
+# (commenting out to save space in free-tier deployment)
+# transformers
+# torch
+# spacy
+
 # en_core_web_sm isn't pip-installable by name; after `pip install -r requirements.txt` run:
 #   python -m spacy download en_core_web_sm
 textstat
