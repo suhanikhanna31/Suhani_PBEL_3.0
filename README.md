@@ -160,7 +160,7 @@ insider-threat-nlp/
 │   │   ├── unsupervised/          IsolationForest + DBSCAN
 │   │   └── watsonx/                watsonx.ai client
 │   ├── governance/                Consent, anonymization, audit log, access control,
-│   │                              bias/fairness audit, OpenScale-style monitoring
+│   │                              bias/fairness audit, OpenScale-style monitoring, RAG Q&A
 │   ├── integrations/              QRadar (SIEM) CEF export stub
 │   ├── api/                       FastAPI app + routes (users, drift, assistant, governance)
 │   └── pipeline.py                End-to-end orchestrator
@@ -311,6 +311,56 @@ runs the 17-test suite, smoke-tests the full synthetic pipeline and
 supervised training end-to-end, and uploads the generated evaluation/
 governance reports as build artifacts — so "the tests pass" is verified
 automatically rather than only asserted in this README.
+
+## Retrieval-augmented question answering
+
+The watsonx Assistant webhook above answers *structured* questions about risk data —
+"show me the top risky users" — by calling back into ranked scores the pipeline
+already computed. It has no way to answer a different, equally realistic class of
+question: how the system itself behaves. An analyst asking "what happens if a user
+revokes consent?" or "how does the audit log detect tampering?" needs an answer
+grounded in this project's actual privacy design and audit trail, not a
+plausible-sounding guess from a model's general training. `src/governance/rag.py`
+adds exactly that, as a new `POST /api/assistant/ask` endpoint alongside the
+existing webhook, without touching drift scoring, either classifier, or
+`pipeline.py` — the same independently-callable-module pattern already used for
+the bias audit and OpenScale-style monitor above.
+
+Retrieval is deliberately **TF-IDF and cosine similarity** — both already available
+through scikit-learn, an existing dependency — rather than an embedding model or
+vector database. This follows directly from two things already true of this
+project: the toolchain philosophy of favoring well-audited, explainable tools over
+the newest available library, and the free-tier memory ceiling described in
+[Deployment status](#deployment-status), where `transformers` and `torch` were
+already stripped from the live deploy for exceeding 512MB before scoring a single
+message — a second heavy model for retrieval would reopen exactly that problem.
+TF-IDF also has a real, related advantage beyond fitting the memory budget: which
+words in the question matched which words in the retrieved passage is directly
+inspectable, the same transparency argument made elsewhere for keeping urgency and
+readability scoring rule-based even after adopting a transformer for sentiment.
+
+The retrieval corpus is built from two real sources: `docs/ETHICS_AND_PRIVACY.md`
+and `docs/ARCHITECTURE.md`, chunked along their existing markdown section headers,
+plus the most recent entries from the real hash-chained audit log, reformatted
+into retrievable sentences via a new `audit_log.get_recent_entries()` function.
+Folding the audit log into the corpus, not just the static docs, means a question
+like "was anything unusual logged recently?" can be answered from what the system
+actually did, not only from what its documentation says it should do. When
+watsonx.ai is configured, a new `answer_with_context()` function
+(`src/models/watsonx/client.py`, following the identical pattern as
+`explain_drift()` and `classify_message_risk()`) asks it to phrase an answer using
+only the retrieved passages, and to say so plainly if they don't actually answer
+the question rather than filling the gap with outside knowledge. When watsonx.ai
+isn't configured — the live deployment's current state — the retrieved passages
+are returned directly, clearly labeled as unprocessed retrieval rather than a
+generated summary, the same "never silently fabricate, state the stub plainly"
+rule the dashboard already follows for `explain_drift()`.
+
+Every question asked through this endpoint is itself written to the audit log as a
+`rag_query` event — including how many sources were retrieved and whether
+watsonx.ai generated the final answer — so this new capability is governed by the
+same tamper-evident trail as every other automated decision in the system, not an
+exception to it.
 
 ## Handling datasets far larger than a laptop can hold
 
