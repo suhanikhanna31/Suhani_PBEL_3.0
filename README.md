@@ -209,18 +209,66 @@ population than about either algorithm. This is exactly the kind of
 result a larger, real dataset is needed to make trustworthy, and the
 report is deliberately not hand-edited to hide that.
 
-**Note on the live demo specifically:** the deployed instance (see
-[Deployment status](#deployment-status)) runs on a real, ~50,000-row
-slice of the actual CERT r4.2 `email.csv` rather than the synthetic
-generator described above — but that slice has no accompanying
-`insider_labels.csv`, since it's a real, unlabeled sample rather than
-CERT's synthetic scenario data. So the live demo's drift scoring and
-unsupervised models (IsolationForest, DBSCAN) run on genuine data, while
-the supervised classifiers and the metrics above reflect a local run
-against the synthetic generator, not the live deployment. Supply your
-own label file at `data/raw/insider_labels.csv` (see the docstring in
-`src/models/supervised/train.py`) to get supervised metrics on real data
-too.
+**Real-data evaluation (unsupervised only — no labels available):** the
+deployed live demo (see [Deployment status](#deployment-status)) runs on
+a real, ~50,000-row slice of the actual CERT r4.2 `email.csv` rather
+than the synthetic generator described above. That slice has no
+accompanying `insider_labels.csv` — it's a real, unlabeled sample, not
+CERT's synthetic scenario data — so `train.py` now detects this and
+exits cleanly with an explanatory message rather than crashing (see
+"Fixes found by running on real data" below), and no AUC/precision/
+recall/F1 is reported for it. What *can* be reported, and was actually
+computed by running the full pipeline against the committed real
+sample:
+
+- 10,000 real messages sampled (streaming reservoir sample, see below)
+  across 942 real users, spanning Jan 2–12, 2010.
+- At the default `BASELINE_WINDOW_SIZE` (30 messages), this 10-day slice
+  is too short for *any* user to fill a baseline window, so every drift
+  score reports as `0.0` — a real, correctly-computed null result, not
+  a bug. Lowering `BASELINE_WINDOW_SIZE` to 5 (still a real, if thin,
+  baseline) is what produces the numbers below.
+- **Drift scoring:** 654/10,000 messages (6.5%) flagged with at least
+  one drifted feature; mean drift score 0.121 (σ = 0.363) among flagged
+  messages, max 3.83.
+- **IsolationForest:** 500/10,000 messages (5.0%, matching the
+  configured `contamination=0.05`) flagged as statistical outliers.
+- **Agreement between signals:** 49 messages were flagged by both drift
+  scoring and IsolationForest — ~7.5% of drift-flagged messages, ~9.8%
+  of IsolationForest-flagged messages. Materially overlapping but not
+  identical, the same pattern claimed for the synthetic run above, now
+  shown on real data.
+- **DBSCAN:** found 2 non-noise clusters (927 and 3 users) among the 942
+  real users, with 12 users (1.3%) landing in no dense cluster and
+  flagged as structural outliers.
+
+Supply your own label file at `data/raw/insider_labels.csv` (see the
+docstring in `src/models/supervised/train.py`) to get supervised
+metrics on real data too.
+
+## Fixes found by running on real data
+
+Two edge cases the synthetic generator never exercised, both caught by
+actually running the pipeline against the real sample above rather than
+assumed away:
+
+- **`score_drift_df()` crashed when zero users had a full baseline
+  window.** With real data this sparse (10 days, ~10 messages/user),
+  nobody reaches the default 30-message window, so `z_df` ends up with
+  no `z_*` columns at all. `pandas.DataFrame.apply(axis=1)` over a
+  zero-column frame doesn't reliably reproduce a per-row Series of
+  dicts, which surfaced as a `KeyError` on `drift_score`/`n_flagged`
+  deep in `aggregate_user_risk`'s named aggregation. Fixed by handling
+  the zero-`z_cols` case explicitly: every message defaults to
+  `drift_score=0.0` (not yet measurable), logged plainly rather than
+  silently.
+- **`train.py`'s smoke test crashed on missing labels.** The
+  `__main__` block assumed `load_insider_labels()` always returns a
+  DataFrame — true for the synthetic generator, false for a real,
+  unlabeled sample — and crashed with a bare `TypeError` on the next
+  line. Fixed to detect `labels is None`, print a clear explanation,
+  and exit 0, matching how the rest of the codebase already degrades
+  gracefully (watsonx, transformers, spaCy) instead of crashing.
 
 ## Bias / fairness audit and ongoing monitoring
 
@@ -279,6 +327,12 @@ cap is `MAX_INGEST_ROWS = 10000` (tunable via `.env` or
 per-user baselines and drift scoring without needing gigabytes of RAM.
 On a synthetic 500k-row / 155MB test file, this sampled 10,000 rows in
 ~1.5s at ~120MB peak RSS instead of loading the whole file first.
+
+This is no longer a purely defensive design for a hypothetical future
+file: a real ~25MB, ~50,000-row slice of the actual CERT r4.2
+`email.csv` is committed at `data/raw/email.csv` and is exactly what
+this streaming/reservoir-sampling path processes on every deploy — see
+"Model evaluation" above for what actually comes out of that real run.
 
 ## Deployment status
 
