@@ -209,6 +209,19 @@ population than about either algorithm. This is exactly the kind of
 result a larger, real dataset is needed to make trustworthy, and the
 report is deliberately not hand-edited to hide that.
 
+**Note on the live demo specifically:** the deployed instance (see
+[Deployment status](#deployment-status)) runs on a real, ~50,000-row
+slice of the actual CERT r4.2 `email.csv` rather than the synthetic
+generator described above — but that slice has no accompanying
+`insider_labels.csv`, since it's a real, unlabeled sample rather than
+CERT's synthetic scenario data. So the live demo's drift scoring and
+unsupervised models (IsolationForest, DBSCAN) run on genuine data, while
+the supervised classifiers and the metrics above reflect a local run
+against the synthetic generator, not the live deployment. Supply your
+own label file at `data/raw/insider_labels.csv` (see the docstring in
+`src/models/supervised/train.py`) to get supervised metrics on real data
+too.
+
 ## Bias / fairness audit and ongoing monitoring
 
 Two governance additions close gaps the ethics doc named but never
