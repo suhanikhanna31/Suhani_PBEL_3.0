@@ -4,8 +4,10 @@
 
 Built for an IBM internship using watsonx.ai, watsonx Assistant, and watsonx.governance, with a full supervised + unsupervised ML pipeline, custom-optimized data structures, and a privacy-first design throughout.
 
+**🔗 Live demo:** **[suhani-pbel-3-0.onrender.com](https://suhani-pbel-3-0.onrender.com)** — deployed on Render's free tier. First load after idle can take ~30–60s to spin back up; see [Deployment status](#deployment-status) for the one deliberate trade-off made to fit the NLP stack into 512MB of RAM.
+
 ---
-> **Quick start:** `pip install -r requirements.txt && uvicorn src.api.app:app --reload` → open http://localhost:8000
+> **Quick start:** `pip install -r requirements.txt && uvicorn src.api.app:app --reload` → open http://localhost:8000 (or just open the live demo above — no setup needed)
 ## The idea
 
 Most insider-threat tooling watches *what* people access — file transfers, login anomalies, badge swipes. This project watches *how* people write.
@@ -87,7 +89,7 @@ This is where the NASSCOM EDA training and the core Python data stack get put to
 - **numpy** underpins the statistical core: the sliding-window baseline engine computes running mean/variance incrementally (see DSA section below), and every feature extractor — sentiment scores, z-scores, drift scores — is numeric array math under the hood.
 - **matplotlib** and **seaborn** drive the two exploratory notebooks (`notebooks/01_eda.ipynb`, `notebooks/02_feature_exploration.ipynb`): message-volume time series, per-user activity distributions, message-length histograms, and — the key validation plot — a boxplot comparing average drift scores between normal and ground-truth-insider users, which is the empirical check on whether the entire linguistic-drift hypothesis actually holds on this data before trusting it operationally.
 - **scikit-learn** provides `StandardScaler`, `train_test_split`, `RandomForestClassifier`, `IsolationForest`, `DBSCAN`, and the full classification-report/AUC/confusion-matrix evaluation stack.
-- **Hugging Face `transformers`** (DistilBERT fine-tuned on SST-2) does sentiment scoring, and **spaCy** (`en_core_web_sm`) does POS tagging for stylometry — model-driven NLP rather than a hand-built lexicon, with NLTK/TextBlob kept in as automatic fallbacks if a model can't be downloaded (e.g. offline/CI).
+- **Hugging Face `transformers`** (DistilBERT fine-tuned on SST-2) does sentiment scoring, and **spaCy** (`en_core_web_sm`) does POS tagging for stylometry — model-driven NLP rather than a hand-built lexicon, with NLTK/TextBlob kept in as automatic fallbacks if a model can't be downloaded (e.g. offline/CI, or the memory-constrained free-tier deploy — see [Deployment status](#deployment-status)).
 
 ### Supervised learning
 
@@ -267,4 +269,8 @@ On a synthetic 500k-row / 155MB test file, this sampled 10,000 rows in
 
 ## Deployment status
 
-The project is fully containerized (`deployment/Dockerfile`) and documented for IBM Cloud Code Engine (`deployment/ibm-cloud/DEPLOY.md`), including exact CLI commands for both a registry-based build and a build-from-source flow. Live deployment was blocked by IBM Cloud account-level billing verification requirements on Cloud Object Storage (a prerequisite for any watsonx.ai project) — not by anything in the application itself, which runs correctly locally end to end, dashboard included. The deployment path is a config/credentials step away from working once account verification is resolved.
+**Live now:** [suhani-pbel-3-0.onrender.com](https://suhani-pbel-3-0.onrender.com), deployed straight from `deployment/Dockerfile` on Render's free web-service tier (512MB RAM, spins down on idle — expect a slow first request after inactivity).
+
+The project is also fully containerized and documented for IBM Cloud Code Engine (`deployment/ibm-cloud/DEPLOY.md`), including exact CLI commands for both a registry-based build and a build-from-source flow. Live deployment there was blocked by IBM Cloud account-level billing verification requirements on Cloud Object Storage (a prerequisite for any watsonx.ai project) — not by anything in the application itself. That path remains a config/credentials step away from working once account verification is resolved.
+
+**One deliberate trade-off on the free-tier deployment:** `torch` + `transformers` alone reliably exceed 512MB before a single message is even scored, which OOM-killed the first deploy attempt. Rather than pay for a bigger instance, the live demo runs with `transformers`, `torch`, and `spacy` left out of `requirements.txt` entirely — code that was already written to support this (see `_get_sentiment_pipeline()` in `src/features/linguistic_features.py` and `_get_spacy_pipeline()` in `src/features/stylometry.py`, both wrapped in `try/except` with an automatic fallback), not a change made to accommodate hosting. So the hosted demo scores sentiment via TextBlob and POS via NLTK rather than DistilBERT/spaCy — slightly less robust on sarcasm and negation, as the code's own docstrings already document as the known trade-off — while every other module (drift scoring, the four DSA structures, both classifiers, unsupervised models, governance, the dashboard) runs identically to the full local setup, since all of them only ever see plain floats regardless of which sentiment backend produced them. Run locally with the full `requirements.txt` (or on a ≥2GB instance) to get the transformer/spaCy path instead.
