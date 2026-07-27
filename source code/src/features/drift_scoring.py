@@ -78,6 +78,29 @@ def score_drift_df(z_df: pd.DataFrame) -> pd.DataFrame:
     z_cols = [c for c in z_df.columns if c.startswith("z_")]
     logger.info(f"Scoring drift across {len(z_df)} rows using {len(z_cols)} z-score features...")
 
+    if not z_cols:
+        # No user in this batch has enough prior history yet to fill even one
+        # feature's baseline window (see BaselineEngine.is_ready) — e.g. a
+        # short/sparse real-data sample where nobody reaches
+        # BASELINE_WINDOW_SIZE messages. pandas' .apply(axis=1) over a
+        # zero-column DataFrame doesn't reliably reproduce a per-row Series of
+        # dicts, so handle this case explicitly instead of relying on it.
+        logger.warning(
+            "No z-score columns present — no user in this batch has enough "
+            "message history yet to fill a baseline window. Every message is "
+            "being scored as drift_score=0.0 (not yet measurable), not as "
+            "'no drift detected'."
+        )
+        result_df = pd.DataFrame(
+            {
+                "drift_score": 0.0,
+                "flagged_features": [[] for _ in range(len(z_df))],
+                "n_flagged": 0,
+            },
+            index=z_df.index,
+        )
+        return pd.concat([z_df, result_df], axis=1)
+
     results = z_df[z_cols].apply(lambda row: score_drift(row.dropna().to_dict()), axis=1)
     result_df = pd.DataFrame(list(results), index=z_df.index)
     return pd.concat([z_df, result_df], axis=1)
