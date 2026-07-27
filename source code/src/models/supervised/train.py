@@ -195,7 +195,6 @@ def predict_risk_proba(model_name: str, X: pd.DataFrame) -> np.ndarray:
     X_scaled = scaler.transform(X[FEATURE_COLS].fillna(0.0))
     return model.predict_proba(X_scaled)[:, 1]
 
-
 if __name__ == "__main__":
     # Full pipeline smoke test using synthetic data end-to-end.
     from src.data.ingest import load_email_data, load_insider_labels
@@ -207,6 +206,24 @@ if __name__ == "__main__":
 
     raw = load_email_data()
     labels = load_insider_labels()
+
+    if labels is None:
+        # Supervised training has a hard dependency on ground-truth labels —
+        # unlike watsonx/transformers/spaCy, there's no meaningful fallback
+        # here. This happens whenever data/raw/ doesn't include a matching
+        # insider_labels.csv, e.g. a real (unlabeled) CERT sample dropped in
+        # to replace the synthetic generator (see README, "Model evaluation").
+        # Exit cleanly rather than crashing, so this is distinguishable from
+        # an actual bug in CI/local runs.
+        print(
+            "No insider_labels.csv found in data/raw/ — skipping supervised "
+            "training (drift scoring and the unsupervised models don't need "
+            "labels and are unaffected). Supply data/raw/insider_labels.csv "
+            "with columns matching load_insider_labels()'s expected schema "
+            "to enable this step."
+        )
+        raise SystemExit(0)
+
     anon = anonymize_dataframe(raw)
     feats = extract_features_df(anon)
     feats = extract_stylometry_df(feats)
