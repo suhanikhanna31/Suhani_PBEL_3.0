@@ -1,0 +1,739 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Signal — Behavioral Drift Detection</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+  :root{
+    --bg:#f4f4f4;
+    --surface:#ffffff;
+    --text:#161616;
+    --text-muted:#525252;
+    --border:#e0e0e0;
+    --blue:#0f62fe;
+    --blue-dark:#0043ce;
+    --teal:#007d79;
+    --amber:#f1c21b;
+    --red:#da1e28;
+    --green:#24a148;
+    --mono:'IBM Plex Mono', monospace;
+    --sans:'IBM Plex Sans', -apple-system, sans-serif;
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  body{
+    background:var(--bg);
+    color:var(--text);
+    font-family:var(--sans);
+    font-size:14px;
+    line-height:1.5;
+  }
+  a{color:var(--blue);}
+
+  header{
+    background:var(--text);
+    color:#fff;
+    padding:20px 32px;
+    display:flex;
+    align-items:baseline;
+    justify-content:space-between;
+    border-bottom:4px solid var(--blue);
+    flex-wrap:wrap;
+    gap:12px;
+  }
+  header .brand{display:flex; align-items:baseline; gap:12px;}
+  header h1{font-size:18px; font-weight:600; letter-spacing:0.2px;}
+  header .eyebrow{
+    font-family:var(--mono);
+    font-size:11px;
+    color:#a8a8a8;
+    text-transform:uppercase;
+    letter-spacing:0.08em;
+  }
+  header .status{
+    font-family:var(--mono);
+    font-size:12px;
+    color:#a8a8a8;
+    display:flex;
+    align-items:center;
+    gap:16px;
+    flex-wrap:wrap;
+  }
+  header .status-item{display:flex; align-items:center; gap:8px;}
+  .dot{width:8px; height:8px; border-radius:50%; background:#42be65; display:inline-block; transition:background 0.2s;}
+  .dot.bad{background:var(--red);}
+  .dot.pending{background:var(--amber);}
+
+  select.role-select{
+    background:#262626;
+    color:#f4f4f4;
+    border:1px solid #525252;
+    font-family:var(--mono);
+    font-size:11px;
+    padding:4px 8px;
+    text-transform:uppercase;
+    letter-spacing:0.04em;
+  }
+
+  main{max-width:1180px; margin:0 auto; padding:32px;}
+
+  .kpi-row{
+    display:grid;
+    grid-template-columns:repeat(4, 1fr);
+    gap:1px;
+    background:var(--border);
+    border:1px solid var(--border);
+    margin-bottom:24px;
+  }
+  .kpi{background:var(--surface); padding:20px 24px;}
+  .kpi .label{font-size:11px; text-transform:uppercase; letter-spacing:0.06em; color:var(--text-muted); font-family:var(--mono);}
+  .kpi .value{font-size:28px; font-weight:600; margin-top:6px; font-family:var(--mono);}
+  .kpi .value.flag{color:var(--red);}
+
+  .toolbar{
+    background:var(--surface);
+    border:1px solid var(--border);
+    border-bottom:none;
+    padding:14px 24px;
+    display:flex;
+    align-items:center;
+    gap:12px;
+    flex-wrap:wrap;
+  }
+  .toolbar input[type="search"]{
+    flex:1 1 220px;
+    min-width:160px;
+    padding:8px 12px;
+    border:1px solid var(--border);
+    background:var(--bg);
+    font-family:var(--sans);
+    font-size:13px;
+    color:var(--text);
+  }
+  .toolbar input[type="search"]:focus{outline:2px solid var(--blue); outline-offset:-1px;}
+  .toolbar label{
+    font-family:var(--mono);
+    font-size:11px;
+    text-transform:uppercase;
+    letter-spacing:0.05em;
+    color:var(--text-muted);
+    display:flex;
+    align-items:center;
+    gap:6px;
+  }
+  .toolbar select{
+    padding:7px 8px;
+    border:1px solid var(--border);
+    background:var(--bg);
+    font-family:var(--mono);
+    font-size:12px;
+    color:var(--text);
+  }
+  .toolbar .spacer{flex:1 1 auto; min-width:0;}
+  .btn{
+    font-family:var(--mono);
+    font-size:12px;
+    text-transform:uppercase;
+    letter-spacing:0.04em;
+    background:var(--text);
+    color:#fff;
+    border:none;
+    padding:8px 14px;
+    cursor:pointer;
+    transition:background 0.1s;
+  }
+  .btn:hover{background:var(--blue-dark);}
+  .btn:active{transform:translateY(1px);}
+  .btn.ghost{background:transparent; color:var(--text); border:1px solid var(--border);}
+  .btn.ghost:hover{background:var(--bg);}
+  .btn.spinning::before{
+    content:"↻ ";
+    display:inline-block;
+    animation:spin 0.8s linear infinite;
+  }
+  @keyframes spin{to{transform:rotate(360deg);}}
+  .toolbar .result-count{font-family:var(--mono); font-size:11px; color:var(--text-muted);}
+
+  .panel{
+    background:var(--surface);
+    border:1px solid var(--border);
+    margin-bottom:24px;
+  }
+  .panel-head{
+    padding:16px 24px;
+    border-bottom:1px solid var(--border);
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    flex-wrap:wrap;
+    gap:8px;
+  }
+  .panel-head h2{font-size:15px; font-weight:600;}
+  .panel-head .hint{font-size:12px; color:var(--text-muted);}
+  .panel-body{padding:0;}
+
+  table{width:100%; border-collapse:collapse;}
+  thead th{
+    text-align:left;
+    font-size:11px;
+    text-transform:uppercase;
+    letter-spacing:0.05em;
+    color:var(--text-muted);
+    font-weight:500;
+    padding:10px 24px;
+    border-bottom:1px solid var(--border);
+    font-family:var(--mono);
+    cursor:pointer;
+    user-select:none;
+    white-space:nowrap;
+  }
+  thead th:hover{color:var(--text);}
+  thead th.sorted{color:var(--blue);}
+  thead th .arrow{font-size:9px; margin-left:3px; opacity:0.7;}
+  tbody td{
+    padding:12px 24px;
+    border-bottom:1px solid var(--border);
+    font-size:13px;
+  }
+  tbody tr{cursor:pointer; transition:background 0.1s;}
+  tbody tr:hover{background:#f4f4f4;}
+  tbody tr.selected{background:#edf5ff; border-left:3px solid var(--blue);}
+  .pseudonym{font-family:var(--mono); font-size:12px;}
+  .score-bar-wrap{display:flex; align-items:center; gap:10px;}
+  .score-bar-track{width:80px; height:6px; background:#e0e0e0; position:relative;}
+  .score-bar-fill{height:100%; background:var(--blue);}
+  .score-bar-fill.high{background:var(--red);}
+  .badge{
+    font-family:var(--mono);
+    font-size:10px;
+    padding:2px 8px;
+    border:1px solid currentColor;
+    text-transform:uppercase;
+  }
+  .badge.outlier{color:var(--red);}
+  .badge.normal{color:var(--text-muted);}
+  .badge.pos{color:var(--green);}
+  .badge.neg{color:var(--red);}
+  .badge.neu{color:var(--text-muted);}
+
+  #detail .panel-body{padding:24px;}
+  .empty-state{padding:48px 24px; text-align:center; color:var(--text-muted); font-size:13px;}
+  .empty-state .glyph{font-family:var(--mono); font-size:24px; color:var(--border); margin-bottom:12px;}
+  .error-banner{
+    background:#fff1f1;
+    border:1px solid #ffd7d9;
+    color:var(--red);
+    padding:12px 16px;
+    font-size:12px;
+    font-family:var(--mono);
+    margin-bottom:16px;
+    display:none;
+  }
+  .error-banner.show{display:block;}
+
+  .detail-grid{display:grid; grid-template-columns:1.2fr 1fr; gap:32px;}
+  .detail-meta{display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-bottom:20px;}
+  .detail-meta .item .label{font-size:11px; color:var(--text-muted); font-family:var(--mono); text-transform:uppercase;}
+  .detail-meta .item .value{font-size:18px; font-weight:600; font-family:var(--mono); margin-top:2px;}
+
+  .explanation-box{
+    background:#f4f4f4;
+    border-left:3px solid var(--teal);
+    padding:14px 16px;
+    font-size:13px;
+    color:var(--text);
+    margin-top:16px;
+  }
+  .explanation-box .src{font-family:var(--mono); font-size:10px; text-transform:uppercase; color:var(--teal); margin-bottom:6px; letter-spacing:0.05em;}
+
+  .flag-list{display:flex; flex-wrap:wrap; gap:6px; margin-top:8px;}
+  .flag-chip{
+    font-family:var(--mono);
+    font-size:11px;
+    background:#fff1f1;
+    color:var(--red);
+    padding:3px 8px;
+    border:1px solid #ffd7d9;
+  }
+
+  .msg-table-wrap{margin-top:24px; border-top:1px solid var(--border); padding-top:16px;}
+  .msg-table-wrap h3{font-size:12px; text-transform:uppercase; letter-spacing:0.05em; color:var(--text-muted); font-family:var(--mono); margin-bottom:10px;}
+  .msg-table{width:100%; font-size:12px; border-collapse:collapse;}
+  .msg-table th{text-align:left; font-family:var(--mono); font-size:10px; text-transform:uppercase; color:var(--text-muted); padding:6px 10px; border-bottom:1px solid var(--border);}
+  .msg-table td{padding:6px 10px; border-bottom:1px solid #f0f0f0; font-family:var(--mono); font-size:11px;}
+  .msg-table tr.flagged td{background:#fff8f0;}
+
+  footer{
+    max-width:1180px; margin:0 auto; padding:24px 32px 48px;
+    font-size:12px; color:var(--text-muted); border-top:1px solid var(--border);
+  }
+  footer a{color:var(--text-muted); text-decoration:underline;}
+
+  canvas{max-height:220px;}
+
+  @media (max-width:820px){
+    .kpi-row{grid-template-columns:repeat(2,1fr);}
+    .detail-grid{grid-template-columns:1fr;}
+    .toolbar{border-bottom:1px solid var(--border);}
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="brand">
+    <h1>Signal</h1>
+    <span class="eyebrow">Behavioral drift detection</span>
+  </div>
+  <div class="status">
+    <div class="status-item"><span class="dot" id="status-dot"></span> <span id="pipeline-status">checking pipeline…</span></div>
+    <div class="status-item">
+      <span>role</span>
+      <select class="role-select" id="role-select">
+        <option value="dev-analyst-token">analyst</option>
+        <option value="dev-admin-token">admin</option>
+      </select>
+    </div>
+    <div class="status-item" id="last-updated">—</div>
+  </div>
+</header>
+
+<main>
+
+  <div class="error-banner" id="error-banner"></div>
+
+  <section class="kpi-row" id="kpi-row">
+    <div class="kpi"><div class="label">Users monitored</div><div class="value" id="kpi-users">—</div></div>
+    <div class="kpi"><div class="label">Messages scored</div><div class="value" id="kpi-messages">—</div></div>
+    <div class="kpi"><div class="label">Flagged this period</div><div class="value flag" id="kpi-flagged">—</div></div>
+    <div class="kpi"><div class="label">Structural outliers</div><div class="value" id="kpi-outliers">—</div></div>
+  </section>
+
+  <div class="toolbar">
+    <input type="search" id="search-input" placeholder="Filter by pseudonym (e.g. emp_) …" />
+    <label>Show
+      <select id="topk-select">
+        <option value="5">Top 5</option>
+        <option value="10" selected>Top 10</option>
+        <option value="20">Top 20</option>
+        <option value="50">Top 50</option>
+      </select>
+    </label>
+    <label>Structure
+      <select id="structure-filter">
+        <option value="all">All</option>
+        <option value="outlier">Outliers only</option>
+        <option value="clustered">Clustered only</option>
+      </select>
+    </label>
+    <div class="spacer"></div>
+    <span class="result-count" id="result-count"></span>
+    <label><input type="checkbox" id="auto-refresh-toggle" /> Auto-refresh
+      <select id="auto-refresh-interval">
+        <option value="10000">10s</option>
+        <option value="30000" selected>30s</option>
+        <option value="60000">60s</option>
+      </select>
+    </label>
+    <button class="btn ghost" id="refresh-btn">Refresh</button>
+  </div>
+
+  <section class="panel" style="margin-bottom:24px; border-top:none;">
+    <div class="panel-body">
+      <table>
+        <thead>
+          <tr>
+            <th data-sort="user_pseudonym">Pseudonym <span class="arrow"></span></th>
+            <th data-sort="avg_drift_score">Drift score <span class="arrow"></span></th>
+            <th data-sort="flagged_message_rate">Flagged rate <span class="arrow"></span></th>
+            <th data-sort="n_messages">Messages <span class="arrow"></span></th>
+            <th data-sort="is_outlier_cluster">Structure <span class="arrow"></span></th>
+          </tr>
+        </thead>
+        <tbody id="risk-table-body">
+          <tr><td colspan="5" class="empty-state">Loading…</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="panel" id="detail">
+    <div class="panel-head">
+      <h2>User detail</h2>
+      <span class="hint" id="detail-hint">Select a user above</span>
+    </div>
+    <div class="panel-body">
+      <div class="empty-state" id="detail-empty">
+        <div class="glyph">◇</div>
+        Click a row in the table to see baseline drift and a plain-language explanation.
+      </div>
+      <div class="detail-grid" id="detail-content" style="display:none;">
+        <div>
+          <canvas id="drift-chart"></canvas>
+          <div class="msg-table-wrap">
+            <h3>Recent scored messages</h3>
+            <div style="max-height:260px; overflow-y:auto;">
+              <table class="msg-table">
+                <thead>
+                  <tr>
+                    <th>#</th>
+                    <th>Drift</th>
+                    <th>Sentiment</th>
+                    <th>Urgency</th>
+                    <th>Readability</th>
+                  </tr>
+                </thead>
+                <tbody id="msg-table-body"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+        <div>
+          <div class="detail-meta">
+            <div class="item"><div class="label">Avg drift score</div><div class="value" id="d-avg">—</div></div>
+            <div class="item"><div class="label">Max drift score</div><div class="value" id="d-max">—</div></div>
+            <div class="item"><div class="label">Messages</div><div class="value" id="d-messages">—</div></div>
+            <div class="item"><div class="label">Flagged rate</div><div class="value" id="d-rate">—</div></div>
+          </div>
+          <div class="label" style="font-size:11px; color:var(--text-muted); font-family:var(--mono); text-transform:uppercase;">Recently flagged features</div>
+          <div class="flag-list" id="d-flags"></div>
+          <div class="explanation-box">
+            <div class="src">watsonx.ai — plain-language summary</div>
+            <div id="d-explanation">Loading explanation…</div>
+          </div>
+
+          <div class="explanation-box" id="agent-box" style="border-left-color:var(--blue);">
+            <div class="src">Agentic investigation — read-only, recommendation only</div>
+            <button class="btn ghost" id="run-agent-btn" style="margin-bottom:10px;">Run investigation</button>
+            <div id="agent-result" style="display:none;">
+              <div><strong id="agent-action"></strong></div>
+              <div id="agent-rationale" style="margin-top:6px;"></div>
+              <div id="agent-trace" style="margin-top:10px; font-family:var(--mono); font-size:11px; color:var(--text-muted);"></div>
+              <div style="margin-top:8px; font-size:11px; color:var(--text-muted);">Requires human review before any action is taken.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<footer>
+  Pseudonymous by design — no raw usernames or message content leave the pipeline. See
+  <a href="#" onclick="alert('See docs/ETHICS_AND_PRIVACY.md in the project repo.'); return false;">ETHICS_AND_PRIVACY.md</a>
+  for the consent and anonymization design. Every scoring decision is recorded in a tamper-evident audit log
+  (<a href="#" onclick="alert('GET /api/governance/audit-log/verify'); return false;">verify chain</a>).
+</footer>
+
+<script>
+  const API_BASE = '/api';
+  const FETCH_K = 50; // always pull a generous pool from the server; table controls slice/filter/sort client-side
+
+  let rawRiskData = [];      // last successful fetch, unfiltered
+  let selectedPseudonym = null;
+  let autoRefreshTimer = null;
+
+  function headers() {
+    return { 'X-API-Role-Token': document.getElementById('role-select').value };
+  }
+
+  async function fetchJSON(url, opts={}) {
+    const res = await fetch(url, { headers: headers(), ...opts });
+    if (!res.ok) {
+      let detail = `${res.status} ${res.statusText}`;
+      try { const body = await res.json(); if (body.detail) detail = body.detail; } catch(e) {}
+      throw new Error(detail);
+    }
+    return res.json();
+  }
+
+  function fmt(n, d=2) {
+    if (n === undefined || n === null || Number.isNaN(n)) return '—';
+    return Number(n).toFixed(d);
+  }
+
+  function showError(msg) {
+    const el = document.getElementById('error-banner');
+    if (!msg) { el.classList.remove('show'); el.textContent = ''; return; }
+    el.textContent = msg;
+    el.classList.add('show');
+  }
+
+  function setStatus(state, text) {
+    const dot = document.getElementById('status-dot');
+    dot.className = 'dot' + (state === 'ok' ? '' : state === 'bad' ? ' bad' : ' pending');
+    document.getElementById('pipeline-status').textContent = text;
+  }
+
+  // ---- data loading ----
+
+  async function loadDashboard({ silent=false } = {}) {
+    const btn = document.getElementById('refresh-btn');
+    if (!silent) btn.classList.add('spinning');
+    if (!silent) setStatus('pending', 'refreshing…');
+    try {
+      rawRiskData = await fetchJSON(`${API_BASE}/users/risk?k=${FETCH_K}`);
+      setStatus('ok', 'pipeline live');
+      showError(null);
+      document.getElementById('last-updated').textContent =
+        'updated ' + new Date().toLocaleTimeString();
+      renderKPIs();
+      applyFiltersAndRender();
+    } catch (e) {
+      setStatus('bad', 'pipeline not run — see README');
+      showError(`Could not load risk data: ${e.message}`);
+      document.getElementById('risk-table-body').innerHTML =
+        `<tr><td colspan="5" class="empty-state">No data yet. Run <code>python -m src.pipeline</code> then reload.</td></tr>`;
+    } finally {
+      btn.classList.remove('spinning');
+    }
+  }
+
+  function renderKPIs() {
+    const totalMessages = rawRiskData.reduce((a, u) => a + (u.n_messages || 0), 0);
+    const totalFlagged = rawRiskData.reduce((a, u) => a + Math.round((u.flagged_message_rate||0) * (u.n_messages||0)), 0);
+    const outliers = rawRiskData.filter(u => u.is_outlier_cluster).length;
+
+    document.getElementById('kpi-users').textContent = rawRiskData.length;
+    document.getElementById('kpi-messages').textContent = totalMessages;
+    document.getElementById('kpi-flagged').textContent = totalFlagged;
+    document.getElementById('kpi-outliers').textContent = outliers;
+  }
+
+  // ---- client-side filter / sort / render ----
+
+  let sortKey = 'avg_drift_score';
+  let sortDir = -1; // -1 desc, 1 asc
+
+  function getFiltered() {
+    const q = document.getElementById('search-input').value.trim().toLowerCase();
+    const structureMode = document.getElementById('structure-filter').value;
+    const topK = parseInt(document.getElementById('topk-select').value, 10);
+
+    let rows = rawRiskData.filter(u => {
+      if (q && !u.user_pseudonym.toLowerCase().includes(q)) return false;
+      if (structureMode === 'outlier' && !u.is_outlier_cluster) return false;
+      if (structureMode === 'clustered' && u.is_outlier_cluster) return false;
+      return true;
+    });
+
+    rows.sort((a, b) => {
+      let av = a[sortKey], bv = b[sortKey];
+      if (sortKey === 'is_outlier_cluster') { av = av ? 1 : 0; bv = bv ? 1 : 0; }
+      if (typeof av === 'string') return sortDir * av.localeCompare(bv);
+      return sortDir * ((av ?? 0) - (bv ?? 0));
+    });
+
+    return rows.slice(0, topK);
+  }
+
+  function applyFiltersAndRender() {
+    const rows = getFiltered();
+    document.getElementById('result-count').textContent =
+      `${rows.length} of ${rawRiskData.length} users`;
+    renderTable(rows);
+    updateSortHeaders();
+  }
+
+  function updateSortHeaders() {
+    document.querySelectorAll('thead th[data-sort]').forEach(th => {
+      th.classList.toggle('sorted', th.dataset.sort === sortKey);
+      const arrow = th.querySelector('.arrow');
+      arrow.textContent = th.dataset.sort === sortKey ? (sortDir === 1 ? '▲' : '▼') : '';
+    });
+  }
+
+  function renderTable(rows) {
+    const maxScore = Math.max(...rawRiskData.map(u => u.avg_drift_score), 1);
+    const body = document.getElementById('risk-table-body');
+    body.innerHTML = '';
+
+    if (rows.length === 0) {
+      body.innerHTML = `<tr><td colspan="5" class="empty-state">No users match the current filters.</td></tr>`;
+      return;
+    }
+
+    rows.forEach((u) => {
+      const pct = Math.min((u.avg_drift_score / maxScore) * 100, 100);
+      const tr = document.createElement('tr');
+      if (u.user_pseudonym === selectedPseudonym) tr.classList.add('selected');
+      tr.innerHTML = `
+        <td class="pseudonym">${u.user_pseudonym}</td>
+        <td>
+          <div class="score-bar-wrap">
+            <span>${fmt(u.avg_drift_score)}</span>
+            <div class="score-bar-track"><div class="score-bar-fill ${pct>60?'high':''}" style="width:${pct}%"></div></div>
+          </div>
+        </td>
+        <td>${fmt((u.flagged_message_rate||0)*100, 1)}%</td>
+        <td>${u.n_messages}</td>
+        <td><span class="badge ${u.is_outlier_cluster ? 'outlier' : 'normal'}">${u.is_outlier_cluster ? 'outlier' : 'clustered'}</span></td>
+      `;
+      tr.addEventListener('click', () => selectUser(u, tr));
+      body.appendChild(tr);
+    });
+  }
+
+  // ---- detail panel ----
+
+  let chartInstance = null;
+
+  function sentimentBadge(polarity) {
+    if (polarity === undefined || polarity === null) return '<span class="badge neu">n/a</span>';
+    if (polarity > 0.15) return `<span class="badge pos">pos ${fmt(polarity)}</span>`;
+    if (polarity < -0.15) return `<span class="badge neg">neg ${fmt(polarity)}</span>`;
+    return `<span class="badge neu">neu ${fmt(polarity)}</span>`;
+  }
+
+  async function selectUser(user, rowEl) {
+    selectedPseudonym = user.user_pseudonym;
+    document.querySelectorAll('#risk-table-body tr').forEach(r => r.classList.remove('selected'));
+    if (rowEl) rowEl.classList.add('selected');
+
+    document.getElementById('detail-empty').style.display = 'none';
+    document.getElementById('detail-content').style.display = 'grid';
+    document.getElementById('detail-hint').textContent = user.user_pseudonym;
+
+    document.getElementById('d-avg').textContent = fmt(user.avg_drift_score);
+    document.getElementById('d-max').textContent = fmt(user.max_drift_score);
+    document.getElementById('d-messages').textContent = user.n_messages;
+    document.getElementById('d-rate').textContent = fmt((user.flagged_message_rate||0)*100, 1) + '%';
+    document.getElementById('d-explanation').textContent = 'Loading explanation…';
+    document.getElementById('d-flags').innerHTML = '';
+    document.getElementById('msg-table-body').innerHTML = '';
+    document.getElementById('agent-result').style.display = 'none';
+    document.getElementById('run-agent-btn').disabled = false;
+    document.getElementById('run-agent-btn').textContent = 'Run investigation';
+
+    try {
+      const messages = await fetchJSON(`${API_BASE}/drift/messages/${user.user_pseudonym}`);
+      renderChart(messages);
+      renderMessageTable(messages);
+
+      const flagSet = new Set();
+      messages.slice(-25).forEach(m => {
+        (m.flagged_features || '').toString().split(',').forEach(f => { if (f.trim()) flagSet.add(f.trim()); });
+      });
+      document.getElementById('d-flags').innerHTML = [...flagSet].slice(0, 8)
+        .map(f => `<span class="flag-chip">${f}</span>`).join('') || '<span class="flag-chip" style="color:var(--text-muted); background:#f4f4f4; border-color:var(--border);">none recently</span>';
+    } catch (e) {
+      document.getElementById('d-explanation').textContent = 'Could not load message history.';
+    }
+
+    try {
+      const explain = await fetchJSON(`${API_BASE}/drift/explain/${user.user_pseudonym}`);
+      document.getElementById('d-explanation').textContent = explain.explanation;
+    } catch (e) {
+      document.getElementById('d-explanation').textContent = 'watsonx.ai explanation unavailable.';
+    }
+  }
+
+  async function runAgentInvestigation() {
+    if (!selectedPseudonym) return;
+    const btn = document.getElementById('run-agent-btn');
+    btn.disabled = true;
+    btn.textContent = 'Investigating…';
+    try {
+      const report = await fetchJSON(`${API_BASE}/agent/investigate/${selectedPseudonym}`, { method: 'POST' });
+      document.getElementById('agent-action').textContent =
+        `Recommended: ${report.recommendation.replaceAll('_', ' ')}` +
+        (report.watsonx_reasoning_used ? ' (watsonx.ai reasoning)' : ' (rule-based fallback)');
+      document.getElementById('agent-rationale').textContent = report.rationale;
+      document.getElementById('agent-trace').textContent =
+        'Evidence gathered: ' + report.evidence_trace.map(t => t.tool).join(' → ');
+      document.getElementById('agent-result').style.display = 'block';
+      btn.textContent = 'Re-run investigation';
+    } catch (e) {
+      document.getElementById('agent-rationale').textContent = `Investigation failed: ${e.message}`;
+      document.getElementById('agent-result').style.display = 'block';
+      btn.textContent = 'Run investigation';
+    } finally {
+      btn.disabled = false;
+    }
+  }
+
+  function renderMessageTable(messages) {
+    const body = document.getElementById('msg-table-body');
+    const recent = messages.slice(-30).reverse();
+    body.innerHTML = recent.map((m, i) => `
+      <tr class="${(m.n_flagged||0) > 0 ? 'flagged' : ''}">
+        <td>${recent.length - i}</td>
+        <td>${fmt(m.drift_score)}</td>
+        <td>${sentimentBadge(m.sentiment_polarity)}</td>
+        <td>${fmt(m.urgency_score)}</td>
+        <td>${fmt(m.readability_flesch, 1)}</td>
+      </tr>
+    `).join('') || '<tr><td colspan="5" class="empty-state">No scored messages.</td></tr>';
+  }
+
+  function renderChart(messages) {
+    const ctx = document.getElementById('drift-chart').getContext('2d');
+    const labels = messages.map((m, i) => i + 1);
+    const scores = messages.map(m => m.drift_score);
+
+    if (chartInstance) chartInstance.destroy();
+    chartInstance = new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels,
+        datasets: [{
+          label: 'Drift score per message',
+          data: scores,
+          borderColor: '#0f62fe',
+          backgroundColor: 'rgba(15,98,254,0.08)',
+          fill: true,
+          tension: 0.2,
+          pointRadius: 0,
+          borderWidth: 2,
+        }]
+      },
+      options: {
+        responsive: true,
+        plugins: { legend: { display: false } },
+        scales: {
+          x: { display: false },
+          y: { grid: { color: '#e0e0e0' }, ticks: { font: { family: 'IBM Plex Mono', size: 10 } } }
+        }
+      }
+    });
+  }
+
+  // ---- wiring ----
+
+  document.getElementById('search-input').addEventListener('input', applyFiltersAndRender);
+  document.getElementById('topk-select').addEventListener('change', applyFiltersAndRender);
+  document.getElementById('structure-filter').addEventListener('change', applyFiltersAndRender);
+  document.getElementById('refresh-btn').addEventListener('click', () => loadDashboard());
+  document.getElementById('run-agent-btn').addEventListener('click', runAgentInvestigation);
+  document.getElementById('role-select').addEventListener('change', () => loadDashboard());
+
+  document.querySelectorAll('thead th[data-sort]').forEach(th => {
+    th.addEventListener('click', () => {
+      const key = th.dataset.sort;
+      if (sortKey === key) { sortDir *= -1; } else { sortKey = key; sortDir = -1; }
+      applyFiltersAndRender();
+    });
+  });
+
+  document.getElementById('auto-refresh-toggle').addEventListener('change', (e) => {
+    if (autoRefreshTimer) { clearInterval(autoRefreshTimer); autoRefreshTimer = null; }
+    if (e.target.checked) {
+      const ms = parseInt(document.getElementById('auto-refresh-interval').value, 10);
+      autoRefreshTimer = setInterval(() => loadDashboard({ silent: true }), ms);
+    }
+  });
+  document.getElementById('auto-refresh-interval').addEventListener('change', () => {
+    if (document.getElementById('auto-refresh-toggle').checked) {
+      document.getElementById('auto-refresh-toggle').dispatchEvent(new Event('change'));
+    }
+  });
+
+  loadDashboard();
+</script>
+
+</body>
+</html>
