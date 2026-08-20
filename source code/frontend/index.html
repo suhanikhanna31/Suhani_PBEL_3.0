@@ -218,6 +218,65 @@
   .badge.pos{color:var(--green);}
   .badge.neg{color:var(--red);}
   .badge.neu{color:var(--text-muted);}
+  .badge.anomaly{color:var(--red);}
+  .badge.notanomaly{color:var(--text-muted);}
+
+  .signal-tag{
+    font-family:var(--mono);
+    font-size:9px;
+    text-transform:uppercase;
+    letter-spacing:0.04em;
+    color:var(--text-muted);
+    border:1px solid var(--border);
+    border-radius:2px;
+    padding:1px 5px;
+    margin-left:6px;
+    white-space:nowrap;
+  }
+  th.sorted .signal-tag{color:var(--blue); border-color:var(--blue);}
+
+  .ask-panel textarea{
+    width:100%;
+    min-height:56px;
+    padding:10px 12px;
+    border:1px solid var(--border);
+    background:var(--bg);
+    font-family:var(--sans);
+    font-size:13px;
+    color:var(--text);
+    resize:vertical;
+  }
+  .ask-panel textarea:focus{outline:2px solid var(--blue); outline-offset:-1px;}
+  .ask-panel .ask-row{display:flex; gap:10px; align-items:flex-start; margin-bottom:12px;}
+  .ask-panel .ask-row .btn{flex:0 0 auto; align-self:flex-start;}
+  .ask-answer{
+    background:#f4f4f4;
+    border-left:3px solid var(--teal);
+    padding:14px 16px;
+    font-size:13px;
+    color:var(--text);
+    white-space:pre-wrap;
+    display:none;
+  }
+  .ask-sources{margin-top:10px; display:flex; flex-wrap:wrap; gap:6px;}
+  .source-chip{
+    font-family:var(--mono);
+    font-size:10px;
+    color:var(--teal);
+    border:1px solid var(--teal);
+    padding:2px 7px;
+  }
+  .ask-suggestions{display:flex; flex-wrap:wrap; gap:8px; margin-bottom:12px;}
+  .ask-suggestions button{
+    font-family:var(--mono);
+    font-size:11px;
+    background:transparent;
+    border:1px solid var(--border);
+    color:var(--text-muted);
+    padding:5px 10px;
+    cursor:pointer;
+  }
+  .ask-suggestions button:hover{color:var(--text); border-color:var(--text-muted);}
 
   #detail .panel-body{padding:24px;}
   .empty-state{padding:48px 24px; text-align:center; color:var(--text-muted); font-size:13px;}
@@ -309,7 +368,10 @@
     <div class="kpi"><div class="label">Users monitored</div><div class="value" id="kpi-users">—</div></div>
     <div class="kpi"><div class="label">Messages scored</div><div class="value" id="kpi-messages">—</div></div>
     <div class="kpi"><div class="label">Flagged this period</div><div class="value flag" id="kpi-flagged">—</div></div>
-    <div class="kpi"><div class="label">Structural outliers</div><div class="value" id="kpi-outliers">—</div></div>
+    <div class="kpi" title="DBSCAN clusters users by their overall behavioral profile. Users who don't fall into any dense peer cluster (label -1) are structural outliers — a signal independent from a user's own drift history.">
+      <div class="label">Structural outliers <span class="signal-tag">DBSCAN</span></div>
+      <div class="value" id="kpi-outliers">—</div>
+    </div>
   </section>
 
   <div class="toolbar">
@@ -350,7 +412,7 @@
             <th data-sort="avg_drift_score">Drift score <span class="arrow"></span></th>
             <th data-sort="flagged_message_rate">Flagged rate <span class="arrow"></span></th>
             <th data-sort="n_messages">Messages <span class="arrow"></span></th>
-            <th data-sort="is_outlier_cluster">Structure <span class="arrow"></span></th>
+            <th data-sort="is_outlier_cluster" title="DBSCAN clusters users by their overall behavioral profile rather than comparing them to their own history the way drift scoring does. OUTLIER = doesn't resemble any dense peer group.">Structure <span class="signal-tag">DBSCAN</span> <span class="arrow"></span></th>
           </tr>
         </thead>
         <tbody id="risk-table-body">
@@ -384,6 +446,7 @@
                     <th>Sentiment</th>
                     <th>Urgency</th>
                     <th>Readability</th>
+                    <th title="IsolationForest — message-level anomaly detection over linguistic/stylometric features, independent of this user's own drift baseline.">Anomaly <span class="signal-tag">Iso. Forest</span></th>
                   </tr>
                 </thead>
                 <tbody id="msg-table-body"></tbody>
@@ -397,6 +460,14 @@
             <div class="item"><div class="label">Max drift score</div><div class="value" id="d-max">—</div></div>
             <div class="item"><div class="label">Messages</div><div class="value" id="d-messages">—</div></div>
             <div class="item"><div class="label">Flagged rate</div><div class="value" id="d-rate">—</div></div>
+            <div class="item" title="Structural clustering signal (DBSCAN) — does this user resemble a dense peer group, independent of their own drift history?">
+              <div class="label">Structure <span class="signal-tag">DBSCAN</span></div>
+              <div class="value" id="d-structure">—</div>
+            </div>
+            <div class="item" title="Message-level anomalies from IsolationForest, an independent signal from drift scoring — how many of this user's recent messages looked statistically unusual in feature space.">
+              <div class="label">Anomalies <span class="signal-tag">Iso. Forest</span></div>
+              <div class="value" id="d-anomalies">—</div>
+            </div>
           </div>
           <div class="label" style="font-size:11px; color:var(--text-muted); font-family:var(--mono); text-transform:uppercase;">Recently flagged features</div>
           <div class="flag-list" id="d-flags"></div>
@@ -406,7 +477,7 @@
           </div>
 
           <div class="explanation-box" id="agent-box" style="border-left-color:var(--blue);">
-            <div class="src">Agentic investigation — read-only, recommendation only</div>
+            <div class="src">Agentic investigation <span class="signal-tag" style="color:var(--blue); border-color:var(--blue);">Agentic AI</span> — read-only, recommendation only</div>
             <button class="btn ghost" id="run-agent-btn" style="margin-bottom:10px;">Run investigation</button>
             <div id="agent-result" style="display:none;">
               <div><strong id="agent-action"></strong></div>
@@ -416,6 +487,30 @@
             </div>
           </div>
         </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="panel ask-panel" id="ask-panel">
+    <div class="panel-head">
+      <h2>Ask about this system</h2>
+      <span class="hint">Retrieval-augmented Q&amp;A over governance docs + audit log <span class="signal-tag">RAG</span></span>
+    </div>
+    <div class="panel-body" style="padding:24px;">
+      <div class="ask-suggestions">
+        <button type="button" data-q="What happens if a user revokes consent?">What happens on consent revocation?</button>
+        <button type="button" data-q="How does the audit log detect tampering?">How is the audit log tamper-evident?</button>
+        <button type="button" data-q="How is a user's identity protected from re-identification?">How is re-identification prevented?</button>
+        <button type="button" data-q="Was anything unusual logged recently?">Anything unusual logged recently?</button>
+      </div>
+      <div class="ask-row">
+        <textarea id="ask-input" placeholder="e.g. What happens if a user revokes consent? — answered from ETHICS_AND_PRIVACY.md, ARCHITECTURE.md, and the live audit log, not general knowledge."></textarea>
+        <button class="btn" id="ask-btn">Ask</button>
+      </div>
+      <div class="ask-answer" id="ask-answer">
+        <div class="src" id="ask-answer-src">watsonx.ai — grounded answer</div>
+        <div id="ask-answer-text"></div>
+        <div class="ask-sources" id="ask-sources"></div>
       </div>
     </div>
   </section>
@@ -589,6 +684,13 @@
     return `<span class="badge neu">neu ${fmt(polarity)}</span>`;
   }
 
+  function anomalyBadge(isAnomaly, score) {
+    if (isAnomaly === undefined || isAnomaly === null) return '<span class="badge neu">n/a</span>';
+    return isAnomaly
+      ? `<span class="badge anomaly">anomaly ${fmt(score)}</span>`
+      : `<span class="badge notanomaly">normal ${fmt(score)}</span>`;
+  }
+
   async function selectUser(user, rowEl) {
     selectedPseudonym = user.user_pseudonym;
     document.querySelectorAll('#risk-table-body tr').forEach(r => r.classList.remove('selected'));
@@ -602,6 +704,9 @@
     document.getElementById('d-max').textContent = fmt(user.max_drift_score);
     document.getElementById('d-messages').textContent = user.n_messages;
     document.getElementById('d-rate').textContent = fmt((user.flagged_message_rate||0)*100, 1) + '%';
+    document.getElementById('d-structure').innerHTML =
+      `<span class="badge ${user.is_outlier_cluster ? 'outlier' : 'normal'}">${user.is_outlier_cluster ? 'outlier' : 'clustered'}</span>`;
+    document.getElementById('d-anomalies').textContent = '—';
     document.getElementById('d-explanation').textContent = 'Loading explanation…';
     document.getElementById('d-flags').innerHTML = '';
     document.getElementById('msg-table-body').innerHTML = '';
@@ -613,6 +718,9 @@
       const messages = await fetchJSON(`${API_BASE}/drift/messages/${user.user_pseudonym}`);
       renderChart(messages);
       renderMessageTable(messages);
+
+      const anomalyCount = messages.filter(m => m.is_anomaly).length;
+      document.getElementById('d-anomalies').textContent = `${anomalyCount} / ${messages.length}`;
 
       const flagSet = new Set();
       messages.slice(-25).forEach(m => {
@@ -666,8 +774,9 @@
         <td>${sentimentBadge(m.sentiment_polarity)}</td>
         <td>${fmt(m.urgency_score)}</td>
         <td>${fmt(m.readability_flesch, 1)}</td>
+        <td>${anomalyBadge(m.is_anomaly, m.anomaly_score)}</td>
       </tr>
-    `).join('') || '<tr><td colspan="5" class="empty-state">No scored messages.</td></tr>';
+    `).join('') || '<tr><td colspan="6" class="empty-state">No scored messages.</td></tr>';
   }
 
   function renderChart(messages) {
@@ -701,6 +810,52 @@
       }
     });
   }
+
+  // ---- ask panel (RAG) ----
+
+  async function runAsk(question) {
+    if (!question || !question.trim()) return;
+    const btn = document.getElementById('ask-btn');
+    const answerBox = document.getElementById('ask-answer');
+    btn.disabled = true;
+    btn.textContent = 'Asking…';
+    answerBox.style.display = 'block';
+    document.getElementById('ask-answer-src').textContent = 'Retrieving…';
+    document.getElementById('ask-answer-text').textContent = 'Searching governance docs and audit log…';
+    document.getElementById('ask-sources').innerHTML = '';
+    try {
+      const result = await fetchJSON(`${API_BASE}/assistant/dashboard-ask`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ question, k: 4 }),
+      });
+      document.getElementById('ask-answer-src').textContent =
+        result.watsonx_generated ? 'watsonx.ai — grounded answer' : 'Retrieved passages (watsonx.ai not configured)';
+      document.getElementById('ask-answer-text').textContent = result.assistant_response;
+      document.getElementById('ask-sources').innerHTML = (result.sources || [])
+        .map(s => `<span class="source-chip">${s.source} · ${fmt(s.score, 2)}</span>`).join('')
+        || '<span class="source-chip" style="color:var(--text-muted); border-color:var(--border);">no matching sources</span>';
+    } catch (e) {
+      document.getElementById('ask-answer-src').textContent = 'Error';
+      document.getElementById('ask-answer-text').textContent = `Could not get an answer: ${e.message}`;
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Ask';
+    }
+  }
+
+  document.getElementById('ask-btn').addEventListener('click', () => {
+    runAsk(document.getElementById('ask-input').value);
+  });
+  document.getElementById('ask-input').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) runAsk(document.getElementById('ask-input').value);
+  });
+  document.querySelectorAll('.ask-suggestions button').forEach(b => {
+    b.addEventListener('click', () => {
+      document.getElementById('ask-input').value = b.dataset.q;
+      runAsk(b.dataset.q);
+    });
+  });
 
   // ---- wiring ----
 
