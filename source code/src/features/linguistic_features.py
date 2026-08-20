@@ -14,6 +14,11 @@ Features:
                                                  TextBlob fallback if the model
                                                  can't be loaded)
 - urgency_score                                (Aho-Corasick trie, DSA-optimized)
+- social_engineering_score                     (categorized Aho-Corasick trie,
+                                                 src/dsa/social_engineering_lexicon.py —
+                                                 authority spoofing, isolation/secrecy,
+                                                 artificial scarcity, trust exploitation,
+                                                 curiosity baiting)
 - readability (Flesch reading ease)            (textstat)
 - lexical_diversity (type-token ratio)         (regex tokenization)
 - avg_word_length, exclamation_ratio, caps_ratio, message_length
@@ -26,6 +31,7 @@ import textstat
 
 from src.config import URGENCY_PHRASES
 from src.dsa.trie_phrase_matcher import AhoCorasick
+from src.dsa.social_engineering_lexicon import SocialEngineeringLexicon
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -34,6 +40,11 @@ _WORD_RE = re.compile(r"[A-Za-z']+")
 
 # Built once, reused for every message — this is the whole point of Aho-Corasick.
 _urgency_matcher = AhoCorasick(URGENCY_PHRASES)
+
+# Same pattern, for the categorized social-engineering lexicon (see
+# src/dsa/social_engineering_lexicon.py for why this is a separate matcher
+# set rather than folded into _urgency_matcher above).
+_social_engineering_lexicon = SocialEngineeringLexicon()
 
 _SENTIMENT_MODEL_NAME = "distilbert-base-uncased-finetuned-sst-2-english"
 _sentiment_pipeline = None  # None = not yet attempted, False = load failed, pipeline = ready
@@ -116,6 +127,24 @@ def urgency_features(text: str) -> dict:
     return {"urgency_score": round(_urgency_matcher.urgency_score(text), 4)}
 
 
+def social_engineering_features(text: str) -> dict:
+    """
+    Aggregate social_engineering_score, from the categorized lexicon
+    (authority spoofing, isolation/secrecy, artificial scarcity, trust
+    exploitation, curiosity baiting). Kept as a single aggregate feature
+    here — the per-category breakdown (lexicon.category_scores()) is
+    available separately for analyst-facing explanations (e.g. the
+    investigation agent), but only the aggregate flows into baseline/drift
+    scoring, matching how urgency_score is a single number rather than
+    one per phrase.
+    """
+    return {
+        "social_engineering_score": round(
+            _social_engineering_lexicon.social_engineering_score(text), 4
+        )
+    }
+
+
 def readability_features(text: str) -> dict:
     try:
         score = textstat.flesch_reading_ease(text)
@@ -150,6 +179,7 @@ def extract_message_features(text: str) -> dict:
     feats = {}
     feats.update(sentiment_features(text))
     feats.update(urgency_features(text))
+    feats.update(social_engineering_features(text))
     feats.update(readability_features(text))
     feats.update(lexical_diversity_features(text))
     feats.update(surface_features(text))
