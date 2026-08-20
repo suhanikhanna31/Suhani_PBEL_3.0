@@ -2,8 +2,7 @@
   "builds": [
     {
       "src": "src/api/app.py",
-      "use": "@vercel/python",
-      "config": { "maxDuration": 15 }
+      "use": "@vercel/python"
     }
   ],
   "routes": [
