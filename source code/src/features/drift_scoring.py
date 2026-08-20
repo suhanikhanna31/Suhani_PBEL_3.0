@@ -9,7 +9,7 @@ interpretable drift score per message/user, using the config threshold
 This is intentionally simple and auditable (a weighted absolute z-score
 average + a flagged-feature count) rather than a black box, because the
 governance/ethics angle of this project depends on analysts being able to
-see *why* a user was flagged, not just a bare score.
+see *why* a user was flagged, not just a bare score
 """
 import logging
 from typing import Dict, List
