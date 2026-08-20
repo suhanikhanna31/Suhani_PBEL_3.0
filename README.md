@@ -15,7 +15,7 @@ Most insider-threat tooling watches *what* people access — file transfers, log
 The premise, from the original project brief: subtle shifts in tone, urgency, or phrasing in internal communications (email, Slack, tickets) correlate with three distinct risk patterns —
 
 - **Insider risk** — someone's communication style drifting before a harmful action (the CERT insider-threat research dataset this project is built on documents this pattern directly).
-- **Social engineering susceptibility** — messages showing markers of manipulation (urgency, secrecy language, authority pressure).
+- **Social engineering susceptibility** — messages showing markers of manipulation: urgency language, plus a categorized lexicon (authority spoofing, isolation/secrecy framing, artificial scarcity, trust exploitation, curiosity baiting) informed by attention-warfare / media-literacy manipulation-technique taxonomies rather than one flat "urgency" bucket — see the DSA table below.
 - **Account compromise** — someone impersonating a colleague, whose writing style doesn't match the account's normal baseline.
 
 The system doesn't try to read intent. It measures **statistical drift** — how far a person's current writing has moved from their own historical baseline — and surfaces that as a ranked, explainable signal for a human analyst to review. It never acts autonomously on a flag.
@@ -82,7 +82,7 @@ Raw email data (CERT schema)
   Analyst dashboard (FastAPI + minimalist IBM-style frontend)
 ```
 
-Every one of those boxes is a real, working, independently-testable module — not a diagram of an idea. The project ships with 21 passing unit tests and a synthetic-data generator that exercises the entire pipeline end to end without needing the real dataset present.
+Every one of those boxes is a real, working, independently-testable module — not a diagram of an idea. The project ships with 29 passing unit tests and a synthetic-data generator that exercises the entire pipeline end to end without needing the real dataset present.
 
 ---
 
@@ -126,10 +126,23 @@ This project treats data-structure choice as a real engineering decision tied to
 |---|---|---|---|
 | **Sliding-window rolling stats** | `src/dsa/sliding_window.py` | Recomputing a user's baseline mean/variance from scratch on every new message | O(w) per update → **O(1) amortized**, via an incremental running-sum approach (a bounded-window variant of Welford's algorithm) |
 | **Aho-Corasick automaton** | `src/dsa/trie_phrase_matcher.py` | Scanning every message against dozens of urgency/social-engineering phrases | O(phrases × text length) naive substring search → **O(text length + matches)**, independent of how many phrases are in the lexicon |
+| **Categorized Aho-Corasick lexicon** | `src/dsa/social_engineering_lexicon.py` | Distinguishing *which* manipulation technique a message resembles, not just that manipulative language is present | One `AhoCorasick` matcher per category (authority spoofing, isolation/secrecy, artificial scarcity, trust exploitation, curiosity baiting), each still **O(text length + matches)** — reuses the same automaton unchanged, at the cost of a small constant factor (5 scans instead of 1) in exchange for a per-category, analyst-explainable breakdown |
 | **Bounded min-heap** | `src/dsa/top_k_heap.py` | Finding the Top-K riskiest users out of a full population for the dashboard | O(N log N) full sort → **O(N log K)**, since K (10–50) is tiny compared to N (thousands) |
 | **LRU cache** | `src/dsa/lru_cache_baselines.py` | Keeping every user's baseline resident in memory forever in a long-running service | Unbounded memory growth → **O(capacity)** bounded memory, keyed to actually-recent activity |
 
 Each one is unit-tested in isolation (`tests/test_core.py`) and has a runnable self-test (`python -m src.dsa.<module>`) demonstrating the exact behavior it's built for — including edge cases like zero-variance baselines and near-zero-variance z-score blowup (which the drift-scoring layer explicitly clips, see `MAX_ABS_Z` in `src/features/drift_scoring.py`, so one near-constant feature can't dominate an otherwise-meaningful risk score).
+
+### Extending the phrase lexicon: attention-warfare-informed social engineering detection
+
+The original urgency lexicon (`config.URGENCY_PHRASES`) treats all manipulative language as one undifferentiated "urgency" signal. `src/dsa/social_engineering_lexicon.py` extends this by drawing on the standard attention-warfare / media-literacy taxonomy of manipulation techniques — **authority spoofing**, **isolation/secrecy framing**, **artificial scarcity**, **trust exploitation**, and **curiosity baiting** — to categorize phrases by *which* manipulation technique they represent, not just that manipulation is present.
+
+Each category runs through its own `AhoCorasick` automaton (`src/dsa/trie_phrase_matcher.py`, reused unchanged), so per-category scanning stays O(text length + matches) regardless of lexicon size. The categorized phrase lists live in `config.SOCIAL_ENGINEERING_LEXICON`, kept deliberately non-overlapping with `URGENCY_PHRASES` — the two lexicons run as independent features rather than one replacing the other.
+
+The aggregate `social_engineering_score` (mean of the five category scores, for the same reason `MAX_ABS_Z` clips any single feature elsewhere: one strongly-matched category shouldn't alone drown out the rest) feeds into the same per-user baseline and drift-scoring pipeline as every other linguistic feature — tracked in `TRACKED_FEATURES` (`src/features/baseline_engine.py`) and weighted at 1.8 in `FEATURE_WEIGHTS` (`src/features/drift_scoring.py`), just under urgency's 2.0, since it's a targeted-manipulation signal rather than a general tone shift. The per-category breakdown (`SocialEngineeringLexicon.category_scores()` / `.scan()`) is kept available separately, for a future analyst-facing explanation of *why* a message resembles a specific manipulation pattern, rather than only a single opaque number.
+
+This is rule-based phrase matching, not machine learning — no training, no labels, no model, same technique class as the existing urgency detector. It strengthens the ML side only indirectly: `social_engineering_score` becomes one more input feature to the supervised classifiers (RandomForest/XGBoost) and unsupervised models (IsolationForest/DBSCAN) already described above, without being learned itself — consistent with this project's existing preference for auditable, explainable scoring over black-box models wherever the two are substitutable (see [`docs/ETHICS_AND_PRIVACY.md`](docs/ETHICS_AND_PRIVACY.md)).
+
+8 new unit tests cover this module (`tests/test_social_engineering_lexicon.py`), kept in its own file rather than appended to `tests/test_core.py` so each is independently reviewable.
 
 ---
 
@@ -191,7 +204,8 @@ insider-threat-nlp/
 │   ├── config.py                  Central config (env-driven)
 │   ├── data/                      Ingestion, anonymization, validation, synthetic data
 │   ├── features/                  Linguistic + stylometric extraction, baseline engine, drift scoring
-│   ├── dsa/                       Sliding window, Aho-Corasick, top-K heap, LRU cache
+│   ├── dsa/                       Sliding window, Aho-Corasick, categorized social-engineering
+│   │                              lexicon, top-K heap, LRU cache
 │   ├── models/
 │   │   ├── supervised/            RandomForest + XGBoost training, metrics report, SHAP explainability
 │   │   ├── unsupervised/          IsolationForest + DBSCAN
@@ -206,7 +220,8 @@ insider-threat-nlp/
 ├── notebooks/                     EDA + feature exploration (pandas/matplotlib/seaborn)
 ├── deployment/                    Dockerfile + IBM Cloud Code Engine deploy guide
 ├── docs/                          Architecture + Ethics/Privacy design docs
-└── tests/                         21 unit tests across DSA, drift scoring, anonymization, agent fallback
+└── tests/                         29 unit tests across DSA, drift scoring, anonymization,
+                                  agent fallback, social-engineering lexicon
 
 (CI workflow lives at the repo root: .github/workflows/ci.yml)
 ```
@@ -221,7 +236,7 @@ cp .env.example .env   # fill in watsonx.ai credentials if available
 python -m src.pipeline                                    # run the full pipeline
 python -m src.models.supervised.train                     # train supervised models
 uvicorn src.api.app:app --reload --host 0.0.0.0 --port 8000  # dashboard at localhost:8000
-pytest tests/                                              # 21 tests
+pytest tests/                                              # 29 tests
 ```
 
 No real dataset required to see it run — `src/data/synthetic_cert_data.py` generates CERT-schema data with a simulated pre-incident drift pattern, so the whole pipeline (features → baselines → drift scoring → unsupervised models → supervised training → dashboard) is demonstrable immediately. Drop the real [CERT Insider Threat dataset](https://kaggle.com/datasets/nitishabharathi/cert-insider-threat) into `data/raw/email.csv` to switch to real data with no code changes.
@@ -345,7 +360,7 @@ next step once one exists.
 ## Continuous integration
 
 `.github/workflows/ci.yml` runs on every push/PR: installs dependencies,
-runs the 17-test suite, smoke-tests the full synthetic pipeline and
+runs the 29-test suite, smoke-tests the full synthetic pipeline and
 supervised training end-to-end, and uploads the generated evaluation/
 governance reports as build artifacts — so "the tests pass" is verified
 automatically rather than only asserted in this README.
