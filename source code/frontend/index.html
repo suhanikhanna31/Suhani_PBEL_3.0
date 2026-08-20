@@ -537,7 +537,7 @@
   }
 
   async function fetchJSON(url, opts={}) {
-    const res = await fetch(url, { headers: headers(), ...opts });
+    const res = await fetch(url, { ...opts, headers: { ...headers(), ...(opts.headers || {}) } });
     if (!res.ok) {
       let detail = `${res.status} ${res.statusText}`;
       try { const body = await res.json(); if (body.detail) detail = body.detail; } catch(e) {}
