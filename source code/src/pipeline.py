@@ -49,7 +49,11 @@ def run_pipeline() -> dict:
     _, _, user_with_clusters = fit_dbscan_clusters(user_risk)
 
     # persist for the API layer to read without recomputation
-    scored.to_csv(DATA_PROCESSED / "scored_messages.csv", index=False)
+    # NOTE: must write msg_with_anomaly (not the original `scored`) — it's the
+    # frame with IsolationForest's anomaly_score/is_anomaly columns attached.
+    # Writing `scored` here silently dropped those columns before they ever
+    # reached the API, even though the model ran and logged its results above.
+    msg_with_anomaly.to_csv(DATA_PROCESSED / "scored_messages.csv", index=False)
     user_with_clusters.to_csv(DATA_PROCESSED / "user_risk.csv", index=False)
 
     labels = load_insider_labels()
