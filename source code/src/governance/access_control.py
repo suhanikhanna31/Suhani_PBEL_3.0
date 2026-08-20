@@ -22,8 +22,9 @@ _DEV_ROLE_TOKENS = {
 }
 
 ROLE_PERMISSIONS = {
-    "analyst": {"view_drift", "view_users", "view_dashboard", "run_investigation"},
-    "admin": {"view_drift", "view_users", "view_dashboard", "revoke_consent", "view_audit_log", "run_investigation"},
+    "analyst": {"view_drift", "view_users", "view_dashboard", "run_investigation", "ask_assistant"},
+    "admin": {"view_drift", "view_users", "view_dashboard", "revoke_consent", "view_audit_log",
+              "run_investigation", "ask_assistant"},
 }
 
 
