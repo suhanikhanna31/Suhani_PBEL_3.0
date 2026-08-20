@@ -22,6 +22,7 @@ router = APIRouter()
 EXPOSED_COLUMNS = [
     "user", "date", "drift_score", "n_flagged", "flagged_features",
     "sentiment_polarity", "urgency_score", "readability_flesch",
+    "anomaly_score", "is_anomaly",
 ]
 
 
