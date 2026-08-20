@@ -25,8 +25,16 @@ logger = logging.getLogger(__name__)
 
 # The features we track drift on. Keep this list in sync with what
 # linguistic_features.py / stylometry.py actually produce.
+#
+# social_engineering_score added alongside urgency_score: it comes from a
+# separate, categorized lexicon (src/dsa/social_engineering_lexicon.py) and
+# is tracked as its own baseline/drift feature rather than merged into
+# urgency_score, so an analyst can see the two signals disagree (e.g. a
+# message with low raw urgency language but high authority-spoofing /
+# isolation framing still drifts on this feature independently).
 TRACKED_FEATURES = [
     "sentiment_polarity", "sentiment_subjectivity", "urgency_score",
+    "social_engineering_score",
     "readability_flesch", "lexical_diversity", "function_word_ratio",
     "noun_ratio", "verb_ratio",
 ]
@@ -105,12 +113,14 @@ if __name__ == "__main__":
     engine = BaselineEngine()
     # toy example: user drifts from calm to urgent
     for i in range(35):
-        row = {"sentiment_polarity": 0.1, "urgency_score": 0.0, "sentiment_subjectivity": 0.2,
+        row = {"sentiment_polarity": 0.1, "urgency_score": 0.0,
+               "social_engineering_score": 0.0, "sentiment_subjectivity": 0.2,
                "readability_flesch": 60, "lexical_diversity": 0.7, "function_word_ratio": 0.4,
                "noun_ratio": 0.2, "verb_ratio": 0.15}
         z = engine.process_message("emp_test", row)
     # now an anomalous message
-    anomalous = {"sentiment_polarity": -0.9, "urgency_score": 0.9, "sentiment_subjectivity": 0.9,
+    anomalous = {"sentiment_polarity": -0.9, "urgency_score": 0.9,
+                 "social_engineering_score": 0.85, "sentiment_subjectivity": 0.9,
                  "readability_flesch": 20, "lexical_diversity": 0.3, "function_word_ratio": 0.1,
                  "noun_ratio": 0.5, "verb_ratio": 0.4}
     print(engine.process_message("emp_test", anomalous))
