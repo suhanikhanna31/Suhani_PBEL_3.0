@@ -64,3 +64,39 @@ URGENCY_PHRASES = [
     "final notice", "before end of day", "confidential request",
     "bypass the process", "skip approval", "reset your credentials",
 ]
+
+# ---- Categorized social-engineering lexicon (used by
+# src/dsa/social_engineering_lexicon.py) ----
+# Grouped by manipulation technique rather than left as one flat list, so
+# a flagged message can be explained as "authority spoofing" or "artificial
+# scarcity" rather than just "urgency" — see
+# docs/ATTENTION_WARFARE_LEXICON.md for where each category comes from.
+# Deliberately non-overlapping with URGENCY_PHRASES above; that lexicon and
+# this one run as independent features (urgency_score vs
+# social_engineering_score), not a replacement of one by the other.
+SOCIAL_ENGINEERING_LEXICON = {
+    "authority_spoofing": [
+        "direct order from", "on behalf of the director", "ceo needs this",
+        "compliance requires you to", "legal has approved this request",
+        "executive request", "per instructions from senior management",
+    ],
+    "isolation_secrecy": [
+        "do not forward this email", "keep this strictly between us",
+        "do not loop in your manager", "this is off the record",
+        "handle this discreetly", "do not cc anyone else",
+    ],
+    "artificial_scarcity": [
+        "only available today", "last chance to act",
+        "limited time offer", "window closes in one hour",
+        "one time exception", "offer expires shortly",
+    ],
+    "trust_exploitation": [
+        "as a valued colleague", "i know i can trust you with this",
+        "just between friends", "you're the only one i can ask",
+        "i trust you to handle this quietly",
+    ],
+    "curiosity_clickbait": [
+        "you won't believe what", "click to see", "see what happened next",
+        "check this out before it's too late", "you need to see this now",
+    ],
+}
