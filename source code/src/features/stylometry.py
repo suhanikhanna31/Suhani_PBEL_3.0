@@ -85,18 +85,44 @@ def punctuation_features(text: str) -> dict:
 _EMPTY_POS_RATIOS = {"noun_ratio": 0.0, "verb_ratio": 0.0, "adj_ratio": 0.0, "adv_ratio": 0.0}
 
 
+_NLTK_RESOURCES = [
+    ("tokenizers/punkt", "punkt"),
+    ("tokenizers/punkt_tab", "punkt_tab"),
+    ("taggers/averaged_perceptron_tagger", "averaged_perceptron_tagger"),
+    ("taggers/averaged_perceptron_tagger_eng", "averaged_perceptron_tagger_eng"),
+]
+_nltk_resources_ready = False
+
+
+def _ensure_nltk_resources():
+    """
+    Checks each NLTK resource under its correct path once per process
+    (tokenizers/ for punkt*, taggers/ for the POS tagger packages — mixing
+    these up makes nltk.data.find() always raise LookupError even when the
+    data is present, which used to trigger a real nltk.download() network
+    call on every single message rather than once). Cached via a module
+    flag so a 10k-message run does this check once, not 10k times.
+    """
+    global _nltk_resources_ready
+    if _nltk_resources_ready:
+        return
+    import nltk
+    for path, pkg in _NLTK_RESOURCES:
+        try:
+            nltk.data.find(path)
+        except LookupError:
+            try:
+                nltk.download(pkg, quiet=True)
+            except Exception:
+                pass
+    _nltk_resources_ready = True
+
+
 def _nltk_pos_tags(text: str):
     """Fallback tagger, only imported/used if spaCy's model isn't installed."""
     try:
         import nltk
-        for pkg in ["punkt", "punkt_tab", "averaged_perceptron_tagger", "averaged_perceptron_tagger_eng"]:
-            try:
-                nltk.data.find(f"tokenizers/{pkg}")
-            except LookupError:
-                try:
-                    nltk.download(pkg, quiet=True)
-                except Exception:
-                    pass
+        _ensure_nltk_resources()
         tokens = nltk.word_tokenize(text)
         return [t for _, t in nltk.pos_tag(tokens)]
     except Exception as e:
