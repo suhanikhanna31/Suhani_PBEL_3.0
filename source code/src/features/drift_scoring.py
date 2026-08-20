@@ -32,8 +32,15 @@ MAX_ABS_Z = 10.0
 
 # Not all features are equally diagnostic of insider-risk-relevant drift;
 # urgency and sentiment shifts matter more than e.g. readability alone.
+#
+# social_engineering_score weighted at 1.8, just under urgency_score (2.0):
+# it's a targeted-manipulation signal (authority spoofing, isolation framing,
+# etc.) rather than a general tone shift, so it's treated as similarly
+# diagnostic to urgency rather than left at the 1.0 default a brand-new,
+# uncalibrated feature would otherwise silently get.
 FEATURE_WEIGHTS = {
     "z_urgency_score": 2.0,
+    "z_social_engineering_score": 1.8,
     "z_sentiment_polarity": 1.5,
     "z_sentiment_subjectivity": 1.0,
     "z_function_word_ratio": 1.2,
@@ -123,5 +130,5 @@ def aggregate_user_risk(scored_df: pd.DataFrame, user_col: str = "user") -> pd.D
 
 
 if __name__ == "__main__":
-    sample = {"z_urgency_score": 3.1, "z_sentiment_polarity": -2.8, "z_readability_flesch": 0.4}
+    sample = {"z_urgency_score": 3.1, "z_social_engineering_score": 2.6, "z_sentiment_polarity": -2.8, "z_readability_flesch": 0.4}
     print(score_drift(sample))
