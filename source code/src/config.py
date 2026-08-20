@@ -2,7 +2,7 @@
 Central configuration for the insider-threat-nlp project.
 Reads from environment variables (see .env.example). Keeping this in one
 place means every module (ingest, features, api, governance) agrees on
-paths, salts, and toggles instead of hardcoding them.
+paths, salts, and toggles instead of hardcoding them
 """
 import os
 from pathlib import Path
