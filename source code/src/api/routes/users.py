@@ -7,7 +7,8 @@ import logging
 import pandas as pd
 from fastapi import APIRouter, Depends, HTTPException
 
-from src.config import DATA_PROCESSED, TOP_K_RISKIEST
+from src.config import TOP_K_RISKIEST
+from src.data.store import read_df
 from src.dsa.top_k_heap import TopKRiskHeap
 from src.governance.access_control import get_current_role, check_permission
 
@@ -17,10 +18,10 @@ router = APIRouter()
 
 
 def _load_user_risk() -> pd.DataFrame:
-    path = DATA_PROCESSED / "user_risk.csv"
-    if not path.exists():
+    df = read_df("user_risk")
+    if df is None:
         raise HTTPException(status_code=503, detail="Pipeline has not been run yet. Run `python -m src.pipeline`.")
-    return pd.read_csv(path)
+    return df
 
 
 @router.get("/risk")
