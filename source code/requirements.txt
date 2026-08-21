@@ -7,8 +7,9 @@ textstat
 nltk
 textblob
 
-# ML Deployment (Keep core fallback tools)
+# ML Deployment
 scikit-learn
+xgboost
 joblib
 
 # API Framework
@@ -16,9 +17,6 @@ fastapi
 uvicorn[standard]
 pydantic
 python-multipart
-
-# Testing
-pytest
 
 # Config / env
 python-dotenv
