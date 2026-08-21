@@ -124,6 +124,25 @@
   .type-cursor{display:inline-block; width:8px; height:14px; background:var(--green); margin-left:2px; animation:blink 1s steps(1) infinite;}
   @keyframes blink{50%{opacity:0;}}
 
+  /* Live demo widgets on each feature-tour slide — small self-running
+     canvas/graph + a row of live-updating facts, so the slide shows the
+     signal actually doing something rather than only describing it. */
+  .live-demo{
+    margin-top:16px; background:rgba(6,14,10,0.6); border:1px solid var(--border);
+    padding:14px 16px 12px;
+  }
+  .live-demo canvas{width:100%; height:90px; display:block; background:rgba(0,0,0,0.15);}
+  .live-demo .fact-row{display:flex; gap:20px; margin-top:10px; flex-wrap:wrap;}
+  .live-demo .fact{font-size:11px; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.03em;}
+  .live-demo .fact b{display:block; font-size:14px; color:var(--text-bright); text-transform:none; letter-spacing:0; margin-top:2px; font-family:var(--mono);}
+  .agent-steps{display:flex; flex-wrap:wrap; gap:8px; margin:4px 0 2px;}
+  .agent-step{
+    font-size:10.5px; text-transform:uppercase; letter-spacing:0.03em; color:var(--text-muted);
+    border:1px solid var(--border); padding:5px 10px; transition:all 0.25s ease;
+  }
+  .agent-step.active{color:#04070a; background:var(--green); border-color:var(--green); box-shadow:0 0 10px rgba(57,255,140,0.5);}
+  .agent-step.done{color:var(--text-bright); border-color:var(--border-bright);}
+
   .cta-slide .slide-inner{text-align:center;}
   .btn-enter{
     font-family:var(--mono); font-size:13px; text-transform:uppercase; letter-spacing:0.08em;
@@ -175,6 +194,7 @@
   .kpi .label{font-size:11px; text-transform:uppercase; letter-spacing:0.06em; color:var(--text-muted);}
   .kpi .value{font-size:28px; font-weight:600; margin-top:6px; color:var(--text-bright);}
   .kpi .value.flag{color:var(--red);}
+  .kpi .kpi-desc{font-size:10.5px; color:var(--text-muted); margin-top:6px; line-height:1.4;}
 
   .toolbar{background:var(--surface); border:1px solid var(--border); border-bottom:none; padding:14px 24px; display:flex; align-items:center; gap:12px; flex-wrap:wrap;}
   .toolbar input[type="search"]{flex:1 1 220px; min-width:160px; padding:8px 12px; border:1px solid var(--border); background:var(--bg); font-family:var(--mono); font-size:13px; color:var(--text);}
@@ -226,6 +246,13 @@
   .signal-tag{font-size:9px; text-transform:uppercase; letter-spacing:0.04em; color:var(--text-muted); border:1px solid var(--border); border-radius:2px; padding:1px 5px; margin-left:6px; white-space:nowrap;}
   th.sorted .signal-tag{color:var(--green); border-color:var(--green);}
 
+  .signal-legend{
+    background:var(--surface); border:1px solid var(--border); border-bottom:none;
+    padding:10px 24px; display:flex; flex-wrap:wrap; gap:8px 28px;
+  }
+  .signal-legend-item{font-size:11px; color:var(--text-muted); display:flex; align-items:center; gap:6px; flex:1 1 260px;}
+  .signal-legend-item .signal-tag{margin-left:0;}
+
   .ask-panel textarea{width:100%; min-height:56px; padding:10px 12px; border:1px solid var(--border); background:var(--bg); font-family:var(--mono); font-size:13px; color:var(--text); resize:vertical;}
   .ask-panel textarea:focus{outline:1px solid var(--green); outline-offset:-1px;}
   .ask-panel .ask-row{display:flex; gap:10px; align-items:flex-start; margin-bottom:12px;}
@@ -247,6 +274,8 @@
   .detail-meta{display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-bottom:20px;}
   .detail-meta .item .label{font-size:11px; color:var(--text-muted); text-transform:uppercase;}
   .detail-meta .item .value{font-size:17px; font-weight:600; margin-top:2px; color:var(--text-bright);}
+  .detail-meta .item .item-desc{font-size:10px; color:var(--text-muted); margin-top:4px; line-height:1.4;}
+  .explanation-box .explanation-desc{font-size:10.5px; color:var(--text-muted); margin-bottom:8px;}
 
   .explanation-box{background:var(--surface-2); border-left:3px solid var(--green); padding:14px 16px; font-size:13px; color:var(--text); margin-top:16px;}
   .explanation-box .src{font-size:10px; text-transform:uppercase; color:var(--green); margin-bottom:6px; letter-spacing:0.05em;}
@@ -260,6 +289,26 @@
   .msg-table th{text-align:left; font-size:10px; text-transform:uppercase; color:var(--text-muted); padding:6px 10px; border-bottom:1px solid var(--border);}
   .msg-table td{padding:6px 10px; border-bottom:1px solid rgba(121,255,176,0.06); font-size:11px;}
   .msg-table tr.flagged td{background:rgba(255,203,71,0.05);}
+
+  .admin-tool{display:flex; gap:24px; padding:16px 0; border-bottom:1px solid var(--border); flex-wrap:wrap;}
+  .admin-tool:last-child{border-bottom:none; padding-bottom:0;}
+  .admin-tool-desc{flex:1 1 320px;}
+  .admin-tool-desc p{font-size:12.5px; color:var(--text-muted); margin-top:6px; line-height:1.6;}
+  .admin-tool-action{flex:1 1 260px; display:flex; flex-direction:column; gap:8px; align-items:flex-start;}
+  .admin-tool-action input[type="text"]{width:100%; padding:8px 10px; border:1px solid var(--border); background:var(--bg); font-family:var(--mono); font-size:13px; color:var(--text);}
+  .admin-tool-action input[type="text"]:focus{outline:1px solid var(--green); outline-offset:-1px;}
+  .admin-result{font-size:12px; color:var(--text-muted); min-height:16px;}
+  .admin-result.ok{color:var(--green);}
+  .admin-result.bad{color:var(--red);}
+
+  /* toast for refresh / other transient confirmations */
+  #toast{
+    position:fixed; bottom:24px; right:24px; z-index:50; background:var(--surface-2);
+    border:1px solid var(--border-bright); color:var(--text-bright); padding:10px 16px;
+    font-size:12px; box-shadow:0 0 16px rgba(0,0,0,0.4); opacity:0; transform:translateY(8px);
+    transition:opacity 0.25s ease, transform 0.25s ease; pointer-events:none;
+  }
+  #toast.show{opacity:1; transform:translateY(0);}
 
   footer{max-width:1180px; margin:0 auto; padding:24px 32px 64px; font-size:12px; color:var(--text-muted); border-top:1px solid var(--border);}
   footer a{color:var(--text-muted); text-decoration:underline;}
@@ -276,11 +325,15 @@
 <body>
 
 <canvas id="bg-canvas"></canvas>
+<div id="toast"></div>
 <div class="crt-overlay"></div>
 
 <!-- ============================================================= -->
-<!-- FEATURE TOUR — 8 full-screen scroll-snap slides over the fixed  -->
+<!-- FEATURE TOUR — 5 full-screen scroll-snap slides over the fixed  -->
 <!-- pixel-art background. Static background, scrollable text.       -->
+<!-- Each slide has a live, self-animating demo widget (canvas/JS)   -->
+<!-- so the signal reads as something the system actually does, not  -->
+<!-- just a paragraph about it.                                       -->
 <!-- ============================================================= -->
 <div id="feature-tour" class="content-layer">
 
@@ -292,16 +345,16 @@
         <em>how</em> people write and <em>who</em> they talk to — not file transfers, not
         login logs — and turns statistical drift from a person's own baseline into a
         ranked, explainable signal for a human analyst. It never acts autonomously.
-        Eight independent detection signals run underneath. Scroll through each.
+        Five independent detection signals run underneath, live demos included. Scroll through each.
       </div>
-      <div class="scroll-cue">▼ scroll to explore the signals</div>
+      <div class="scroll-cue">▼ scroll to enter dashboard</div>
     </div>
   </section>
 
-  <!-- 1: Linguistic + stylometric drift (existing) -->
+  <!-- 1: Linguistic + stylometric drift -->
   <section class="feature-slide" data-feature="1">
     <div class="slide-inner">
-      <div class="slide-kicker"><span class="idx">01 / 08</span> Self-baseline drift</div>
+      <div class="slide-kicker"><span class="idx">01 / 05</span> Self-baseline drift</div>
       <h2>Linguistic &amp; stylometric drift</h2>
       <p class="lead">
         Every message is scored against <strong>that person's own recent history</strong> —
@@ -324,53 +377,22 @@
           fallback, POS via spaCy/NLTK fallback — <code>src/features/</code>.</p>
         </div>
       </div>
-      <div class="mini-diagram">
-        <svg viewBox="0 0 300 60"><path class="dash-line" d="M0,45 Q40,10 80,38 T160,20 T240,42 T300,15" /></svg>
+      <div class="live-demo" data-demo="drift">
+        <div class="card-label">Live demo — simulated per-message drift score</div>
+        <canvas id="demo-drift-canvas" width="620" height="90"></canvas>
+        <div class="fact-row">
+          <div class="fact">Current z-score <b id="demo-drift-z">—</b></div>
+          <div class="fact">Baseline band <b>±1.5σ</b></div>
+          <div class="fact">Status <b id="demo-drift-status">—</b></div>
+        </div>
       </div>
     </div>
   </section>
 
-  <!-- 2: Categorized social-engineering lexicon (existing) -->
+  <!-- 2: Unsupervised anomaly detection -->
   <section class="feature-slide" data-feature="2">
     <div class="slide-inner">
-      <div class="slide-kicker"><span class="idx">02 / 08</span> Manipulation-technique detection</div>
-      <h2>Categorized social-engineering lexicon</h2>
-      <p class="lead">
-        Not one flat "urgency" bucket — five distinct manipulation techniques, each
-        scanned independently: authority spoofing, isolation/secrecy framing,
-        artificial scarcity, trust exploitation, curiosity baiting.
-      </p>
-      <div class="stack">
-        <div class="card">
-          <div class="card-label">The idea</div>
-          <p>Drawn from the standard attention-warfare / media-literacy taxonomy of
-          manipulation techniques, so a flagged message reads as
-          <code>"authority spoofing"</code>, not just an opaque score — an analyst can see
-          <em>which kind</em> of pressure the language resembles.</p>
-        </div>
-        <div class="card">
-          <div class="card-label">The tech</div>
-          <p>One Aho-Corasick automaton per category (<code>src/dsa/trie_phrase_matcher.py</code>,
-          reused unchanged) — O(text length + matches) per scan, independent of lexicon
-          size. <code>src/dsa/social_engineering_lexicon.py</code>.</p>
-        </div>
-      </div>
-      <div class="mini-diagram">
-        <svg viewBox="0 0 300 60">
-          <circle class="pulse-node" cx="30" cy="30" r="4" fill="#39ff8c" />
-          <circle class="pulse-node" cx="100" cy="15" r="4" fill="#39ff8c" style="animation-delay:0.3s" />
-          <circle class="pulse-node" cx="170" cy="40" r="4" fill="#39ff8c" style="animation-delay:0.6s" />
-          <circle class="pulse-node" cx="240" cy="20" r="4" fill="#39ff8c" style="animation-delay:0.9s" />
-          <circle class="pulse-node" cx="290" cy="35" r="4" fill="#39ff8c" style="animation-delay:1.2s" />
-        </svg>
-      </div>
-    </div>
-  </section>
-
-  <!-- 3: Unsupervised anomaly detection (existing) -->
-  <section class="feature-slide" data-feature="3">
-    <div class="slide-inner">
-      <div class="slide-kicker"><span class="idx">03 / 08</span> Label-free signals</div>
+      <div class="slide-kicker"><span class="idx">02 / 05</span> Label-free signals</div>
       <h2>Unsupervised anomaly detection</h2>
       <p class="lead">
         A real deployment has no ground-truth insider labels. Two label-free models run
@@ -392,21 +414,21 @@
           surfaced alongside drift score on every dashboard row.</p>
         </div>
       </div>
-      <div class="mini-diagram">
-        <svg viewBox="0 0 300 60">
-          <g fill="none" stroke="#1e7a4c" stroke-width="1">
-            <circle cx="70" cy="32" r="18"/><circle cx="130" cy="32" r="18"/><circle cx="190" cy="32" r="18"/>
-          </g>
-          <circle class="pulse-node" cx="260" cy="15" r="5" fill="#ff5c5c" />
-        </svg>
+      <div class="live-demo" data-demo="anomaly">
+        <div class="card-label">Live demo — message feature-space scatter</div>
+        <canvas id="demo-anomaly-canvas" width="620" height="90"></canvas>
+        <div class="fact-row">
+          <div class="fact">Flagged this batch <b id="demo-anomaly-count">—</b></div>
+          <div class="fact">Cluster assignment <b id="demo-anomaly-cluster">—</b></div>
+        </div>
       </div>
     </div>
   </section>
 
-  <!-- 4: Agentic investigation (existing) -->
-  <section class="feature-slide" data-feature="4">
+  <!-- 3: Agentic investigation -->
+  <section class="feature-slide" data-feature="3">
     <div class="slide-inner">
-      <div class="slide-kicker"><span class="idx">04 / 08</span> Agentic AI</div>
+      <div class="slide-kicker"><span class="idx">03 / 05</span> Agentic AI</div>
       <h2>Agentic investigation loop</h2>
       <p class="lead">
         Given a flagged pseudonym, an agent plans and executes a short sequence of
@@ -428,18 +450,27 @@
           evidence when configured, with a transparent rule-based fallback otherwise.</p>
         </div>
       </div>
-      <div class="mini-diagram">
-        <svg viewBox="0 0 300 60">
-          <path class="dash-line" d="M10,30 L70,30 L70,10 M70,30 L130,30 L130,50 M130,30 L190,30 L190,10 M190,30 L280,30" stroke-dasharray="4 4"/>
-        </svg>
+      <div class="live-demo" data-demo="agent">
+        <div class="card-label">Live demo — evidence trace, auto-playing</div>
+        <div class="agent-steps" id="demo-agent-steps">
+          <span class="agent-step" data-i="0">risk summary</span>
+          <span class="agent-step" data-i="1">recent messages</span>
+          <span class="agent-step" data-i="2">audit events</span>
+          <span class="agent-step" data-i="3">watsonx.ai explanation</span>
+          <span class="agent-step" data-i="4">governance docs</span>
+        </div>
+        <div class="fact-row">
+          <div class="fact">Recommendation <b id="demo-agent-rec">—</b></div>
+          <div class="fact">Human review required <b>true, always</b></div>
+        </div>
       </div>
     </div>
   </section>
 
-  <!-- 5: Privacy & governance (existing) -->
-  <section class="feature-slide" data-feature="5">
+  <!-- 4: Governance & privacy -->
+  <section class="feature-slide" data-feature="4">
     <div class="slide-inner">
-      <div class="slide-kicker"><span class="idx">05 / 08</span> Privacy-first design</div>
+      <div class="slide-kicker"><span class="idx">04 / 05</span> Privacy-first design</div>
       <h2>Governance &amp; privacy architecture</h2>
       <p class="lead">
         Consent-gated. Pseudonymized, not just anonymized. Raw content never persists.
@@ -460,22 +491,22 @@
           (TF-IDF + cosine similarity — no vector DB, fits the free-tier memory budget).</p>
         </div>
       </div>
-      <div class="mini-diagram">
-        <svg viewBox="0 0 300 60">
-          <g class="pulse-node" style="animation-delay:0s"><rect x="10" y="24" width="12" height="12" fill="#39ff8c"/></g>
-          <g class="pulse-node" style="animation-delay:0.4s"><rect x="80" y="24" width="12" height="12" fill="#39ff8c"/></g>
-          <g class="pulse-node" style="animation-delay:0.8s"><rect x="150" y="24" width="12" height="12" fill="#39ff8c"/></g>
-          <g class="pulse-node" style="animation-delay:1.2s"><rect x="220" y="24" width="12" height="12" fill="#39ff8c"/></g>
-          <path class="dash-line" d="M22,30 H80 M92,30 H150 M162,30 H220" />
-        </svg>
+      <div class="live-demo" data-demo="chain">
+        <div class="card-label">Live demo — hash-chain verification &amp; RAG retrieval</div>
+        <canvas id="demo-chain-canvas" width="620" height="90"></canvas>
+        <div class="fact-row">
+          <div class="fact">Chain status <b id="demo-chain-status">—</b></div>
+          <div class="fact">Events logged (demo) <b id="demo-chain-count">—</b></div>
+          <div class="fact">RAG top match score <b id="demo-chain-rag">—</b></div>
+        </div>
       </div>
     </div>
   </section>
 
-  <!-- 6: NEW — Communication-network drift -->
-  <section class="feature-slide" data-feature="6">
+  <!-- 5: Communication-network drift -->
+  <section class="feature-slide" data-feature="5">
     <div class="slide-inner">
-      <div class="slide-kicker"><span class="idx">06 / 08</span> New — social topology</div>
+      <div class="slide-kicker"><span class="idx">05 / 05</span> Social topology</div>
       <h2>Communication-network drift</h2>
       <p class="lead">
         Every other signal on this page asks <em>what</em> or <em>how</em> someone
@@ -502,90 +533,13 @@
           <code>src/features/network_features.py</code>.</p>
         </div>
       </div>
-      <div class="mini-diagram">
-        <svg viewBox="0 0 300 60">
-          <g stroke="#1e7a4c" stroke-width="1">
-            <line x1="150" y1="30" x2="40" y2="12"/><line x1="150" y1="30" x2="60" y2="50"/>
-            <line x1="150" y1="30" x2="230" y2="10"/><line x1="150" y1="30" x2="260" y2="45"/>
-            <line x1="150" y1="30" x2="110" y2="8"/>
-          </g>
-          <circle class="pulse-node" cx="150" cy="30" r="6" fill="#39ff8c"/>
-          <circle cx="40" cy="12" r="3" fill="#4f8a68"/><circle cx="60" cy="50" r="3" fill="#4f8a68"/>
-          <circle cx="230" cy="10" r="3" fill="#4f8a68"/><circle cx="260" cy="45" r="3" fill="#4f8a68"/>
-          <circle cx="110" cy="8" r="3" fill="#4f8a68"/>
-        </svg>
-      </div>
-    </div>
-  </section>
-
-  <!-- 7: NEW — Trajectory / acceleration -->
-  <section class="feature-slide" data-feature="7">
-    <div class="slide-inner">
-      <div class="slide-kicker"><span class="idx">07 / 08</span> New — rate of change</div>
-      <h2>Drift trajectory &amp; acceleration</h2>
-      <p class="lead">
-        A threshold alone can't tell a three-month slow creep from a one-week sharp
-        spike — even when both end at the same drift level, they read very differently
-        to a human analyst.
-      </p>
-      <div class="stack">
-        <div class="card">
-          <div class="card-label">The idea</div>
-          <p>Fit a linear trend across a user's own chronological drift-score sequence
-          (least-squares, far less sensitive to single-message noise than a two-point
-          delta). Compare the trend slope of the window's two halves for a coarse
-          acceleration signal — is the <em>rate</em> of drift itself increasing?</p>
+      <div class="live-demo" data-demo="network">
+        <div class="card-label">Live demo — contact circle over time</div>
+        <canvas id="demo-network-canvas" width="620" height="90"></canvas>
+        <div class="fact-row">
+          <div class="fact">Distinct contacts <b id="demo-network-contacts">—</b></div>
+          <div class="fact">Concentration index <b id="demo-network-concentration">—</b></div>
         </div>
-        <div class="card">
-          <div class="card-label">The tech</div>
-          <p><code>numpy.polyfit</code>, degree 1, over each user's drift-score history
-          — pure numpy, zero new dependencies. <code>src/features/trajectory.py</code>,
-          merged onto the existing per-user risk table.</p>
-        </div>
-      </div>
-      <div class="mini-diagram">
-        <svg viewBox="0 0 300 60">
-          <path class="dash-line" d="M10,50 L100,42 L160,20 L300,5" stroke="#ffcb47"/>
-        </svg>
-      </div>
-    </div>
-  </section>
-
-  <!-- 8: NEW — Context-aware alert suppression -->
-  <section class="feature-slide" data-feature="8">
-    <div class="slide-inner">
-      <div class="slide-kicker"><span class="idx">08 / 08</span> New — alert-fatigue defense</div>
-      <h2>Context-aware alert suppression</h2>
-      <p class="lead">
-        Is this person's problem, or everyone's? If the whole org's baseline shifts
-        together — layoff rumors, a crunch period — every individual rides that shift
-        into looking anomalous relative to their own history, even though nothing about
-        them personally changed.
-      </p>
-      <div class="stack">
-        <div class="card">
-          <div class="card-label">The idea</div>
-          <p>Gates individual escalation on standing <em>relative to this run's own,
-          possibly also-elevated, population</em> — not absolute drift alone. When an
-          org-wide feature-distribution shift is detected, the cohort-outlier bar is
-          raised, so correlated non-individual events don't cause an alert-fatigue
-          cascade of "escalate" recommendations.</p>
-        </div>
-        <div class="card">
-          <div class="card-label">The tech</div>
-          <p>Pure pandas logic reading the existing OpenScale-style monitoring snapshot
-          (<code>src/governance/openscale_monitor.py</code>) to gate
-          <code>src/governance/alert_suppression.py</code> — no new model, no new
-          dependency, a policy decision layered over signals already computed.</p>
-        </div>
-      </div>
-      <div class="mini-diagram">
-        <svg viewBox="0 0 300 60">
-          <circle class="pulse-node" cx="60" cy="30" r="4" fill="#59d9ff"/>
-          <circle class="pulse-node" cx="110" cy="20" r="4" fill="#59d9ff" style="animation-delay:0.2s"/>
-          <circle class="pulse-node" cx="160" cy="35" r="4" fill="#59d9ff" style="animation-delay:0.4s"/>
-          <circle class="pulse-node" cx="230" cy="15" r="6" fill="#ff5c5c" style="animation-delay:0.6s"/>
-        </svg>
       </div>
     </div>
   </section>
@@ -593,16 +547,17 @@
   <section class="feature-slide cta" id="slide-cta">
     <div class="slide-inner">
       <div class="slide-kicker" style="justify-content:center;"><span class="idx">LIVE SYSTEM</span></div>
-      <h2>All eight signals, running now</h2>
+      <h2>All five signals, running now</h2>
       <p class="lead" style="margin:0 auto 26px; text-align:center;">
         Below is the real analyst dashboard, reading from the live pipeline output —
         not a mockup.
       </p>
-      <button class="btn-enter" id="enter-dashboard-btn">Enter the dashboard ▾</button>
+      <button class="btn-enter" id="enter-dashboard-btn">Scroll to enter dashboard ▾</button>
     </div>
   </section>
 
 </div>
+
 
 <!-- ============================================================= -->
 <!-- LIVE DASHBOARD                                                  -->
@@ -633,12 +588,13 @@
   <div class="org-banner" id="org-banner"><span class="glyph">◈</span> <span id="org-banner-text"></span></div>
 
   <section class="kpi-row" id="kpi-row">
-    <div class="kpi"><div class="label">Users monitored</div><div class="value" id="kpi-users">—</div></div>
-    <div class="kpi"><div class="label">Messages scored</div><div class="value" id="kpi-messages">—</div></div>
-    <div class="kpi"><div class="label">Flagged this period</div><div class="value flag" id="kpi-flagged">—</div></div>
+    <div class="kpi"><div class="label">Users monitored</div><div class="value" id="kpi-users">—</div><div class="kpi-desc">People with scored activity in this run.</div></div>
+    <div class="kpi"><div class="label">Messages scored</div><div class="value" id="kpi-messages">—</div><div class="kpi-desc">Total messages passed through the drift pipeline.</div></div>
+    <div class="kpi"><div class="label">Flagged this period</div><div class="value flag" id="kpi-flagged">—</div><div class="kpi-desc">Messages that tripped a drift threshold.</div></div>
     <div class="kpi" title="DBSCAN clusters users by their overall behavioral profile. Users who don't fall into any dense peer cluster (label -1) are structural outliers — a signal independent from a user's own drift history.">
       <div class="label">Structural outliers <span class="signal-tag">DBSCAN</span></div>
       <div class="value" id="kpi-outliers">—</div>
+      <div class="kpi-desc">Users who don't resemble any dense peer cluster — independent of their own drift history.</div>
     </div>
   </section>
 
@@ -676,6 +632,12 @@
       </select>
     </label>
     <button class="btn ghost" id="refresh-btn">Refresh</button>
+  </div>
+
+  <div class="signal-legend">
+    <div class="signal-legend-item"><span class="signal-tag">DBSCAN</span> Structure — does this user resemble a dense peer group, or sit outside every cluster?</div>
+    <div class="signal-legend-item"><span class="signal-tag">Trajectory</span> Trend — least-squares slope of a user's own drift history; flags acceleration, not just level.</div>
+    <div class="signal-legend-item"><span class="signal-tag">Suppression</span> Escalation — standing vs. this run's own population, gated harder during an org-wide shift to avoid alert fatigue.</div>
   </div>
 
   <section class="panel" style="margin-bottom:24px; border-top:none;">
@@ -741,29 +703,35 @@
             <div class="item" title="Structural clustering signal (DBSCAN) — does this user resemble a dense peer group, independent of their own drift history?">
               <div class="label">Structure <span class="signal-tag">DBSCAN</span></div>
               <div class="value" id="d-structure">—</div>
+              <div class="item-desc">Clusters users by overall profile — flags anyone outside every dense peer group.</div>
             </div>
             <div class="item" title="Message-level anomalies from IsolationForest, an independent signal from drift scoring — how many of this user's recent messages looked statistically unusual in feature space.">
               <div class="label">Anomalies <span class="signal-tag">Iso. Forest</span></div>
               <div class="value" id="d-anomalies">—</div>
+              <div class="item-desc">Message-level outliers in feature space, independent of drift score.</div>
             </div>
             <div class="item" title="numpy.polyfit trend slope over this user's own chronological drift-score history, plus a second-half-vs-first-half acceleration check.">
               <div class="label">Trend <span class="signal-tag">Trajectory</span></div>
               <div class="value" id="d-trend">—</div>
+              <div class="item-desc">Rate of change of drift over time — a slow creep vs. a sharp spike.</div>
             </div>
             <div class="item" title="Standing relative to this run's own population (this run's mean/std of avg_drift_score), gated harder during a detected org-wide shift.">
               <div class="label">Cohort z-score <span class="signal-tag">Suppression</span></div>
               <div class="value" id="d-cohort">—</div>
+              <div class="item-desc">Gates escalation against this run's own population to avoid alert fatigue.</div>
             </div>
           </div>
           <div class="label" style="font-size:11px; color:var(--text-muted); text-transform:uppercase; margin-bottom:6px;">Recently flagged features</div>
           <div class="flag-list" id="d-flags"></div>
           <div class="explanation-box">
             <div class="src">watsonx.ai — plain-language summary</div>
+            <div class="explanation-desc">Turns this user's raw scores into a plain-English summary an analyst can act on.</div>
             <div id="d-explanation">Loading explanation…</div>
           </div>
 
           <div class="explanation-box" id="agent-box" style="border-left-color:var(--blue);">
             <div class="src">Agentic investigation <span class="signal-tag" style="color:var(--blue); border-color:var(--blue);">Agentic AI</span> — read-only, recommendation only</div>
+            <div class="explanation-desc">Runs a short chain of read-only lookups on this user, then proposes one next step — it never acts on its own.</div>
             <button class="btn ghost" id="run-agent-btn" style="margin-bottom:10px;">Run investigation</button>
             <div id="agent-result" style="display:none;">
               <div><strong id="agent-action"></strong></div>
@@ -798,6 +766,39 @@
         <div id="ask-answer-text"></div>
         <div class="ask-sources" id="ask-sources"></div>
       </div>
+    </div>
+  </section>
+
+  <section class="panel" id="admin-panel" style="display:none; border-color:var(--border-bright);">
+    <div class="panel-head">
+      <h2>Admin tools</h2>
+      <span class="hint">Only visible with the <b>admin</b> role — analyst role cannot see or call these.</span>
+    </div>
+    <div class="panel-body" style="padding:24px;">
+
+      <div class="admin-tool">
+        <div class="admin-tool-desc">
+          <div class="card-label">Verify audit-log chain</div>
+          <p>Recomputes the hash chain over every logged decision and confirms nothing has been altered or removed.</p>
+        </div>
+        <div class="admin-tool-action">
+          <button class="btn ghost" id="verify-chain-btn">Verify chain</button>
+          <div id="verify-chain-result" class="admin-result"></div>
+        </div>
+      </div>
+
+      <div class="admin-tool">
+        <div class="admin-tool-desc">
+          <div class="card-label">Revoke user consent</div>
+          <p>Revokes a user's consent by their raw identifier (not pseudonym — the consent ledger predates pseudonymization). Takes effect on the next pipeline run.</p>
+        </div>
+        <div class="admin-tool-action">
+          <input type="text" id="revoke-username-input" placeholder="raw username, e.g. jdoe" />
+          <button class="btn ghost" id="revoke-consent-btn">Revoke consent</button>
+          <div id="revoke-consent-result" class="admin-result"></div>
+        </div>
+      </div>
+
     </div>
   </section>
 
@@ -926,6 +927,198 @@
   });
 
   // =====================================================================
+  // Feature-tour live demos — small self-running visualizations so each
+  // signal reads as something the system actually does, not just a
+  // paragraph of text. None of these take input; they animate/update on
+  // their own using simulated numbers so the tour works with no backend.
+  // =====================================================================
+  (function runFeatureDemos() {
+
+    // ---- 1. Linguistic drift: a scrolling line of simulated z-scores ----
+    (function driftDemo() {
+      const canvas = document.getElementById('demo-drift-canvas');
+      if (!canvas) return;
+      const ctx = canvas.getContext('2d');
+      const W = canvas.width, H = canvas.height;
+      const series = Array.from({ length: 60 }, () => (Math.random() - 0.5) * 1.2);
+      function step() {
+        series.shift();
+        const last = series[series.length - 1];
+        let next = last + (Math.random() - 0.5) * 0.9;
+        next = Math.max(-3, Math.min(3, next));
+        series.push(next);
+        ctx.clearRect(0, 0, W, H);
+        // baseline band
+        ctx.fillStyle = 'rgba(57,255,140,0.06)';
+        ctx.fillRect(0, H * 0.5 - (H * 0.5 * (1.5 / 3)), W, H * (1.5 / 3));
+        // zero line
+        ctx.strokeStyle = 'rgba(121,255,176,0.2)';
+        ctx.beginPath(); ctx.moveTo(0, H / 2); ctx.lineTo(W, H / 2); ctx.stroke();
+        // series
+        ctx.beginPath();
+        series.forEach((v, i) => {
+          const x = (i / (series.length - 1)) * W;
+          const y = H / 2 - (v / 3) * (H / 2 - 6);
+          i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+        });
+        ctx.strokeStyle = Math.abs(next) > 1.5 ? '#ff5c5c' : '#39ff8c';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+        document.getElementById('demo-drift-z').textContent = next.toFixed(2);
+        const statusEl = document.getElementById('demo-drift-status');
+        statusEl.textContent = Math.abs(next) > 1.5 ? 'drifting ▲' : 'within baseline';
+        statusEl.style.color = Math.abs(next) > 1.5 ? 'var(--red)' : 'var(--text-bright)';
+      }
+      step();
+      setInterval(step, 900);
+    })();
+
+    // ---- 2. Anomaly detection: scatter with one IsolationForest outlier ----
+    (function anomalyDemo() {
+      const canvas = document.getElementById('demo-anomaly-canvas');
+      if (!canvas) return;
+      const ctx = canvas.getContext('2d');
+      const W = canvas.width, H = canvas.height;
+      const points = Array.from({ length: 24 }, () => ({
+        x: W * 0.5 + (Math.random() - 0.5) * W * 0.55,
+        y: H * 0.55 + (Math.random() - 0.5) * H * 0.55,
+      }));
+      let outlierIdx = 0;
+      let t = 0;
+      function frame() {
+        t += 1;
+        if (t % 40 === 0) outlierIdx = Math.floor(Math.random() * points.length);
+        ctx.clearRect(0, 0, W, H);
+        points.forEach((p, i) => {
+          const isOutlier = i === outlierIdx;
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, isOutlier ? 5 + Math.sin(t / 8) * 1.5 : 3, 0, Math.PI * 2);
+          ctx.fillStyle = isOutlier ? '#ff5c5c' : 'rgba(57,255,140,0.55)';
+          ctx.fill();
+        });
+        document.getElementById('demo-anomaly-count').textContent = '1 / ' + points.length;
+        document.getElementById('demo-anomaly-cluster').textContent =
+          (t % 80 < 40) ? 'dense peer cluster' : 'outlier (label -1)';
+        requestAnimationFrame(frame);
+      }
+      frame();
+    })();
+
+    // ---- 3. Agentic investigation: auto-playing evidence trace ----
+    (function agentDemo() {
+      const stepsWrap = document.getElementById('demo-agent-steps');
+      if (!stepsWrap) return;
+      const steps = [...stepsWrap.querySelectorAll('.agent-step')];
+      const recs = ['escalate_for_manual_review', 'continue_monitoring', 'no_action_needed'];
+      let i = 0;
+      function tick() {
+        steps.forEach((s, idx) => {
+          s.classList.toggle('active', idx === i);
+          s.classList.toggle('done', idx < i);
+        });
+        if (i === steps.length - 1) {
+          document.getElementById('demo-agent-rec').textContent =
+            recs[Math.floor(Math.random() * recs.length)];
+        }
+        i = (i + 1) % (steps.length + 1);
+      }
+      tick();
+      setInterval(tick, 1100);
+    })();
+
+    // ---- 4. Governance: hash-chain verify + RAG score ----
+    (function chainDemo() {
+      const canvas = document.getElementById('demo-chain-canvas');
+      if (!canvas) return;
+      const ctx = canvas.getContext('2d');
+      const W = canvas.width, H = canvas.height;
+      const blocks = 7;
+      const bw = W / blocks;
+      let verifiedUpTo = 0;
+      let eventCount = 214;
+      function draw() {
+        ctx.clearRect(0, 0, W, H);
+        for (let b = 0; b < blocks; b++) {
+          const cx = bw * b + bw / 2;
+          const verified = b < verifiedUpTo;
+          ctx.fillStyle = verified ? 'rgba(57,255,140,0.85)' : 'rgba(121,255,176,0.15)';
+          ctx.fillRect(cx - 16, H / 2 - 14, 32, 28);
+          ctx.strokeStyle = 'rgba(121,255,176,0.4)';
+          ctx.strokeRect(cx - 16, H / 2 - 14, 32, 28);
+          if (b < blocks - 1) {
+            ctx.beginPath();
+            ctx.moveTo(cx + 16, H / 2);
+            ctx.lineTo(cx + bw - 16, H / 2);
+            ctx.strokeStyle = b < verifiedUpTo - 1 ? '#39ff8c' : 'rgba(121,255,176,0.25)';
+            ctx.stroke();
+          }
+        }
+      }
+      function step() {
+        verifiedUpTo++;
+        eventCount++;
+        if (verifiedUpTo > blocks) {
+          verifiedUpTo = 0;
+          document.getElementById('demo-chain-status').textContent = 'verifying…';
+        }
+        if (verifiedUpTo === blocks) {
+          document.getElementById('demo-chain-status').textContent = 'chain valid ✓';
+        }
+        document.getElementById('demo-chain-count').textContent = eventCount;
+        document.getElementById('demo-chain-rag').textContent =
+          (0.62 + Math.random() * 0.3).toFixed(2) + ' cosine';
+        draw();
+      }
+      draw();
+      setInterval(step, 500);
+    })();
+
+    // ---- 5. Communication-network drift: shrinking, concentrating circle ----
+    (function networkDemo() {
+      const canvas = document.getElementById('demo-network-canvas');
+      if (!canvas) return;
+      const ctx = canvas.getContext('2d');
+      const W = canvas.width, H = canvas.height;
+      const cx = W / 2, cy = H / 2;
+      let t = 0;
+      function frame() {
+        t += 1;
+        const phase = (Math.sin(t / 90) + 1) / 2; // 0 -> wide/even, 1 -> narrow/concentrated
+        const contactCount = Math.round(7 - phase * 4); // 7 down to 3
+        const concentration = 0.2 + phase * 0.65;
+        ctx.clearRect(0, 0, W, H);
+        for (let i = 0; i < contactCount; i++) {
+          const angle = (i / contactCount) * Math.PI * 2 + t / 200;
+          const dist = 30 + (1 - phase) * 20;
+          const nx = cx + Math.cos(angle) * dist * 3.3;
+          const ny = cy + Math.sin(angle) * dist * 0.8;
+          const isDominant = i === 0;
+          const weight = isDominant ? 0.3 + concentration * 0.6 : (1 - concentration) / contactCount;
+          ctx.beginPath();
+          ctx.moveTo(cx, cy);
+          ctx.lineTo(nx, ny);
+          ctx.strokeStyle = `rgba(57,255,140,${(0.15 + weight * 0.6).toFixed(2)})`;
+          ctx.lineWidth = 1 + weight * 4;
+          ctx.stroke();
+          ctx.beginPath();
+          ctx.arc(nx, ny, 3 + weight * 5, 0, Math.PI * 2);
+          ctx.fillStyle = isDominant && concentration > 0.55 ? '#59d9ff' : 'rgba(121,255,176,0.6)';
+          ctx.fill();
+        }
+        ctx.beginPath();
+        ctx.arc(cx, cy, 5, 0, Math.PI * 2);
+        ctx.fillStyle = '#39ff8c';
+        ctx.fill();
+        document.getElementById('demo-network-contacts').textContent = contactCount;
+        document.getElementById('demo-network-concentration').textContent = concentration.toFixed(2);
+        requestAnimationFrame(frame);
+      }
+      frame();
+    })();
+
+  })();
+
+  // =====================================================================
   // Live dashboard logic
   // =====================================================================
   const API_BASE = '/api';
@@ -965,6 +1158,15 @@
     const dot = document.getElementById('status-dot');
     dot.className = 'dot' + (state === 'ok' ? '' : state === 'bad' ? ' bad' : ' pending');
     document.getElementById('pipeline-status').textContent = text;
+  }
+
+  let toastTimer = null;
+  function showToast(msg) {
+    const el = document.getElementById('toast');
+    el.textContent = msg;
+    el.classList.add('show');
+    if (toastTimer) clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => el.classList.remove('show'), 2600);
   }
 
   // ---- org-wide monitoring banner (context-aware alert suppression) ----
@@ -1308,15 +1510,79 @@
     });
   });
 
+  // ---- admin tools (only meaningfully callable with the admin role) ----
+
+  function applyRolePermissions() {
+    const role = document.getElementById('role-select').value;
+    const isAdmin = role === 'dev-admin-token';
+    document.getElementById('admin-panel').style.display = isAdmin ? 'block' : 'none';
+  }
+
+  async function verifyAuditChain() {
+    const btn = document.getElementById('verify-chain-btn');
+    const resultEl = document.getElementById('verify-chain-result');
+    btn.disabled = true;
+    resultEl.className = 'admin-result';
+    resultEl.textContent = 'Verifying…';
+    try {
+      const result = await fetchJSON(`${API_BASE}/governance/audit-log/verify`);
+      resultEl.className = 'admin-result ' + (result.chain_valid ? 'ok' : 'bad');
+      resultEl.textContent = result.chain_valid
+        ? '✓ Chain valid — no tampering detected.'
+        : '✗ Chain broken — verification failed.';
+    } catch (e) {
+      resultEl.className = 'admin-result bad';
+      resultEl.textContent = `Could not verify: ${e.message}`;
+    } finally {
+      btn.disabled = false;
+    }
+  }
+
+  async function revokeConsentForUser() {
+    const btn = document.getElementById('revoke-consent-btn');
+    const input = document.getElementById('revoke-username-input');
+    const resultEl = document.getElementById('revoke-consent-result');
+    const username = input.value.trim();
+    if (!username) { resultEl.className = 'admin-result bad'; resultEl.textContent = 'Enter a raw username first.'; return; }
+    btn.disabled = true;
+    resultEl.className = 'admin-result';
+    resultEl.textContent = 'Revoking…';
+    try {
+      const result = await fetchJSON(`${API_BASE}/governance/consent/revoke`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ user_raw_identifier: username }),
+      });
+      resultEl.className = 'admin-result ok';
+      resultEl.textContent = `✓ ${result.status}. ${result.note || ''}`;
+      input.value = '';
+    } catch (e) {
+      resultEl.className = 'admin-result bad';
+      resultEl.textContent = `Could not revoke consent: ${e.message}`;
+    } finally {
+      btn.disabled = false;
+    }
+  }
+
+  document.getElementById('verify-chain-btn').addEventListener('click', verifyAuditChain);
+  document.getElementById('revoke-consent-btn').addEventListener('click', revokeConsentForUser);
+
   // ---- wiring ----
 
   document.getElementById('search-input').addEventListener('input', applyFiltersAndRender);
   document.getElementById('topk-select').addEventListener('change', applyFiltersAndRender);
   document.getElementById('structure-filter').addEventListener('change', applyFiltersAndRender);
   document.getElementById('escalation-filter').addEventListener('change', applyFiltersAndRender);
-  document.getElementById('refresh-btn').addEventListener('click', () => loadDashboard());
+  document.getElementById('refresh-btn').addEventListener('click', () => {
+    loadDashboard().then(() => showToast('Dashboard refreshed — ' + new Date().toLocaleTimeString()));
+  });
   document.getElementById('run-agent-btn').addEventListener('click', runAgentInvestigation);
-  document.getElementById('role-select').addEventListener('change', () => loadDashboard());
+  document.getElementById('role-select').addEventListener('change', () => {
+    applyRolePermissions();
+    const roleName = document.getElementById('role-select').selectedOptions[0].textContent;
+    loadDashboard().then(() => showToast(`Switched to ${roleName} role`));
+  });
+  applyRolePermissions();
 
   document.querySelectorAll('thead th[data-sort]').forEach(th => {
     th.addEventListener('click', () => {
