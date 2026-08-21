@@ -14,6 +14,7 @@ allow_unverified_ssl_for_nltk_downloads()
 
 from src.config import DATA_PROCESSED
 from src.data.ingest import load_email_data, load_insider_labels
+from src.data.store import write_df
 from src.data.anonymize import anonymize_dataframe, pseudonymize_user
 from src.data.validate import validate_email_df
 from src.features.linguistic_features import extract_features_df
@@ -53,8 +54,13 @@ def run_pipeline() -> dict:
     # frame with IsolationForest's anomaly_score/is_anomaly columns attached.
     # Writing `scored` here silently dropped those columns before they ever
     # reached the API, even though the model ran and logged its results above.
-    msg_with_anomaly.to_csv(DATA_PROCESSED / "scored_messages.csv", index=False)
-    user_with_clusters.to_csv(DATA_PROCESSED / "user_risk.csv", index=False)
+    #
+    # write_df (src/data/store.py) writes to the live Neon `scored_messages`/
+    # `user_risk` tables when DATABASE_URL is set — not just a local CSV —
+    # since a deployed API (e.g. on Vercel) has no persistent local disk to
+    # read data/processed/*.csv back from between requests or deploys.
+    write_df(msg_with_anomaly, "scored_messages")
+    write_df(user_with_clusters, "user_risk")
 
     labels = load_insider_labels()
     if labels is not None:
