@@ -4,7 +4,7 @@
 
 Built for an IBM internship using watsonx.ai, watsonx Assistant, and watsonx.governance, with a full supervised + unsupervised ML pipeline, custom-optimized data structures, and a privacy-first design throughout.
 
-**🔗 Live demo:** **[suhani-pbel-3-0.onrender.com](https://suhani-pbel-3-0.onrender.com)** — deployed on Render's free tier. First load after idle can take ~30–60s to spin back up; see [Deployment status](#deployment-status) for the one deliberate trade-off made to fit the NLP stack into 512MB of RAM.
+**🔗 Live demo:** **[suhani-pbel-3-0-ffz4.vercel.app](https://suhani-pbel-3-0-ffz4.vercel.app)** — deployed on Vercel's free tier. First load after idle can take ~30–60s to spin back up; see [Deployment status](#deployment-status) for the one deliberate trade-off made to fit the NLP stack into 512MB of RAM.
 
 ---
 > **Quick start:** `pip install -r requirements.txt && uvicorn src.api.app:app --reload` → open http://localhost:8000 (or just open the live demo above — no setup needed)
@@ -439,7 +439,7 @@ this streaming/reservoir-sampling path processes on every deploy — see
 
 ## Deployment status
 
-**Live now:** [suhani-pbel-3-0.onrender.com](https://suhani-pbel-3-0.onrender.com), deployed straight from `deployment/Dockerfile` on Render's free web-service tier (512MB RAM, spins down on idle — expect a slow first request after inactivity).
+**Live now:** [suhani-pbel-3-0-ffz4.vercel.app](https://suhani-pbel-3-0-ffz4.vercel.app), deployed straight from `deployment/Dockerfile` on Vercel's free web-service tier (512MB RAM, spins down on idle — expect a slow first request after inactivity).
 
 The project is also fully containerized and documented for IBM Cloud Code Engine (`deployment/ibm-cloud/DEPLOY.md`), including exact CLI commands for both a registry-based build and a build-from-source flow. Live deployment there was blocked by IBM Cloud account-level billing verification requirements on Cloud Object Storage (a prerequisite for any watsonx.ai project) — not by anything in the application itself. That path remains a config/credentials step away from working once account verification is resolved.
 
