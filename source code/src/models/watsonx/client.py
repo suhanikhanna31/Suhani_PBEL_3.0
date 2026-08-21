@@ -34,31 +34,50 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 _model = None
+_model_init_failed = False
 
 
 def _get_model():
-    """Lazily construct the watsonx ModelInference client (avoids import cost/errors when unused)."""
-    global _model
+    """
+    Lazily construct the watsonx ModelInference client (avoids import cost/errors when unused).
+
+    Construction itself (bad credential format, missing/broken ibm-watsonx-ai
+    package on the deploy target, network egress restrictions, etc.) can raise
+    just as easily as the actual generate_text() call can. All of that is
+    caught here so a broken/misconfigured watsonx setup degrades to "None"
+    (treated by callers as "unavailable") instead of throwing an unhandled
+    exception through explain_drift()/classify_message_risk()/answer_with_context()
+    and crashing the API endpoint with a 500.
+    """
+    global _model, _model_init_failed
     if _model is not None:
         return _model
-    if not WATSONX_ENABLED:
+    if not WATSONX_ENABLED or _model_init_failed:
         return None
 
-    from ibm_watsonx_ai import Credentials
-    from ibm_watsonx_ai.foundation_models import ModelInference
+    try:
+        from ibm_watsonx_ai import Credentials
+        from ibm_watsonx_ai.foundation_models import ModelInference
 
-    credentials = Credentials(url=WATSONX_URL, api_key=WATSONX_API_KEY)
-    
-    # Overriding the stuck env config directly here to use the correct instruct model
-    active_model_id = "ibm/granite-3-1-8b-instruct"
+        credentials = Credentials(url=WATSONX_URL, api_key=WATSONX_API_KEY)
 
-    _model = ModelInference(
-        model_id=active_model_id,
-        credentials=credentials,
-        project_id=WATSONX_PROJECT_ID,
-        params={"decoding_method": "greedy", "max_new_tokens": 220, "temperature": 0.2},
-    )
-    return _model
+        # Overriding the stuck env config directly here to use the correct instruct model
+        active_model_id = "ibm/granite-3-1-8b-instruct"
+
+        _model = ModelInference(
+            model_id=active_model_id,
+            credentials=credentials,
+            project_id=WATSONX_PROJECT_ID,
+            params={"decoding_method": "greedy", "max_new_tokens": 220, "temperature": 0.2},
+        )
+        return _model
+    except Exception as e:
+        # Don't retry construction on every subsequent call in the same
+        # process (e.g. once per request on Vercel) — remember the failure
+        # so we fail fast and callers get a clean None immediately.
+        _model_init_failed = True
+        logger.error(f"watsonx.ai client initialization failed: {e}")
+        return None
 
 
 def explain_drift(user_pseudonym: str, drift_summary: dict) -> Optional[str]:
@@ -70,7 +89,7 @@ def explain_drift(user_pseudonym: str, drift_summary: dict) -> Optional[str]:
     """
     model = _get_model()
     if model is None:
-        logger.info("watsonx.ai not configured (missing API key/project id) — skipping explanation.")
+        logger.info("watsonx.ai unavailable (unconfigured or failed to initialize) — skipping explanation.")
         return None
 
     prompt = (
@@ -137,7 +156,7 @@ def answer_with_context(question: str, context_chunks: list) -> Optional[str]:
     """
     model = _get_model()
     if model is None:
-        logger.info("watsonx.ai not configured (missing API key/project id) — skipping RAG generation.")
+        logger.info("watsonx.ai unavailable (unconfigured or failed to initialize) — skipping RAG generation.")
         return None
 
     context_block = "\n\n".join(
