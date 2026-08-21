@@ -1,0 +1,29 @@
+# Lean dependency set for the deployed API function only.
+# Vercel's @vercel/python runtime uses this file (colocated with the
+# entrypoint) instead of the project-root requirements.txt, which stays
+# full-sized for CI/training (xgboost, joblib, nltk, textstat, textblob,
+# pytest, etc. are training/pipeline-only and are intentionally NOT
+# duplicated here — they were pushing the function bundle past Vercel's
+# 500 MB limit).
+
+# Core data
+pandas
+numpy
+
+# API framework
+fastapi
+pydantic
+python-multipart
+
+# Config / env
+python-dotenv
+
+# Used by src/governance/rag.py (TF-IDF retrieval)
+scikit-learn
+
+# watsonx.ai SDK — used by src/models/watsonx/client.py
+ibm-watsonx-ai
+
+# Used by src/data/store.py
+SQLAlchemy
+psycopg2-binary
