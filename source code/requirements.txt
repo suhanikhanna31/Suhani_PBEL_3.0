@@ -17,6 +17,9 @@ uvicorn[standard]
 pydantic
 python-multipart
 
+# Testing
+pytest
+
 # Config / env
 python-dotenv
 
