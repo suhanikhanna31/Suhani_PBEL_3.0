@@ -10,12 +10,12 @@ Cloud IAM-based service-to-service auth in production.
 import logging
 
 import pandas as pd
-from fastapi import APIRouter, Depends, Header, HTTPException
+from fastapi import APIRouter, Header, HTTPException
 from pydantic import BaseModel
 
-from src.config import DATA_PROCESSED, ASSISTANT_WEBHOOK_SECRET, TOP_K_RISKIEST
+from src.config import ASSISTANT_WEBHOOK_SECRET, TOP_K_RISKIEST
+from src.data.store import read_df
 from src.dsa.top_k_heap import TopKRiskHeap
-from src.governance.access_control import get_current_role, check_permission
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -36,10 +36,9 @@ def _verify_secret(x_webhook_secret: str):
 def assistant_webhook(query: AssistantQuery, x_webhook_secret: str = Header(default=None)):
     _verify_secret(x_webhook_secret)
 
-    path = DATA_PROCESSED / "user_risk.csv"
-    if not path.exists():
+    df = read_df("user_risk")
+    if df is None:
         return {"assistant_response": "The pipeline hasn't been run yet — no data available."}
-    df = pd.read_csv(path)
 
     if query.intent == "top_risky_users":
         k = int(query.parameters.get("k", TOP_K_RISKIEST))
@@ -105,27 +104,6 @@ def assistant_ask(query: AskQuery, x_webhook_secret: str = Header(default=None))
     """
     _verify_secret(x_webhook_secret)
 
-    from src.governance.rag import answer_question
-    result = answer_question(query.question, k=query.k)
-    return {
-        "assistant_response": result["answer"],
-        "sources": result["sources"],
-        "watsonx_generated": result["watsonx_generated"],
-    }
-
-
-@router.post("/dashboard-ask")
-def dashboard_ask(query: AskQuery, role: str = Depends(get_current_role)):
-    """
-    Same RAG flow as /ask (src/governance/rag.py answer_question), but
-    gated by the dashboard's normal analyst/admin role token instead of
-    the watsonx Assistant's shared webhook secret. /ask stays reserved for
-    the external watsonx Assistant integration; this is what the frontend
-    dashboard's "Ask about this system" panel calls directly so an analyst
-    doesn't need the webhook secret just to query governance docs/audit
-    log from the browser.
-    """
-    check_permission(role, "ask_assistant")
     from src.governance.rag import answer_question
     result = answer_question(query.question, k=query.k)
     return {
