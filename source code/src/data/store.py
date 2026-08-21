@@ -1,113 +1,89 @@
 """
-Webhook consumed by a watsonx Assistant action, so an analyst can ask
-things like "show me users whose communication tone changed significantly
-this week" in natural language and have the Assistant call back into this
-API. Configure the Assistant action's webhook URL to POST here.
+Storage helpers for pipeline outputs (scored_messages, user_risk).
 
-Auth: shared-secret header (ASSISTANT_WEBHOOK_SECRET) — swap for IBM
-Cloud IAM-based service-to-service auth in production.
+Mirrors the same fallback pattern as src/data/ingest.py: when DATABASE_URL
+is set, pipeline outputs are written to / read from live Neon Postgres
+tables, so the deployed API (e.g. on Vercel, whose filesystem is read-only
+and stateless between requests/deploys) can actually serve them. When
+DATABASE_URL is unset, falls back to local CSVs under data/processed/, so
+`python -m src.pipeline` + local `uvicorn` still works exactly as before
+for anyone not using Neon.
+
+This is why the "Pipeline has not been run yet" error shows up on Vercel
+even after running the pipeline locally: local data/processed/*.csv files
+never make it to the deployed function, since each serverless invocation
+gets its own throwaway filesystem. Writing to Neon instead fixes that,
+because Neon is a real persistent database reachable from anywhere.
 """
 import logging
+from typing import Optional
 
 import pandas as pd
-from fastapi import APIRouter, Header, HTTPException
-from pydantic import BaseModel
 
-from src.config import ASSISTANT_WEBHOOK_SECRET, TOP_K_RISKIEST
-from src.data.store import read_df
-from src.dsa.top_k_heap import TopKRiskHeap
+from src.config import DATA_PROCESSED, DATABASE_URL
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
-router = APIRouter()
 
 
-class AssistantQuery(BaseModel):
-    intent: str  # e.g. "top_risky_users", "user_summary"
-    parameters: dict = {}
+def _get_engine():
+    if not DATABASE_URL:
+        return None
+    try:
+        from sqlalchemy import create_engine
+        return create_engine(DATABASE_URL)
+    except ImportError:
+        logger.warning(
+            "DATABASE_URL is set but sqlalchemy/psycopg2-binary aren't "
+            "installed (pip install -r requirements.txt) — falling back to "
+            "local CSV storage under data/processed/."
+        )
+        return None
 
 
-def _verify_secret(x_webhook_secret: str):
-    if x_webhook_secret != ASSISTANT_WEBHOOK_SECRET:
-        raise HTTPException(status_code=401, detail="Invalid webhook secret.")
-
-
-@router.post("/webhook")
-def assistant_webhook(query: AssistantQuery, x_webhook_secret: str = Header(default=None)):
-    _verify_secret(x_webhook_secret)
-
-    df = read_df("user_risk")
-    if df is None:
-        return {"assistant_response": "The pipeline hasn't been run yet — no data available."}
-
-    if query.intent == "top_risky_users":
-        k = int(query.parameters.get("k", TOP_K_RISKIEST))
-        heap = TopKRiskHeap(k=k)
-        for _, row in df.iterrows():
-            heap.push(row["user"], float(row["avg_drift_score"]))
-        top = heap.top_k()
-        lines = [f"{e.user_id}: drift score {e.score:.2f}" for e in top]
-        return {
-            "assistant_response": f"Top {len(top)} users by communication drift this period:\n" + "\n".join(lines),
-            "data": [{"user_pseudonym": e.user_id, "avg_drift_score": e.score} for e in top],
-        }
-
-    if query.intent == "investigate_user":
-        pseudonym = query.parameters.get("user_pseudonym")
-        from src.agents.investigation_agent import investigate_user
-        report = investigate_user(pseudonym, actor="watsonx_assistant")
-        if report.get("error"):
-            return {"assistant_response": report["error"]}
-        return {
-            "assistant_response": (
-                f"Investigation for {pseudonym}: recommended action is "
-                f"'{report['recommendation']}'. {report['rationale']} "
-                "This is a recommendation only — please review before acting."
-            ),
-            "data": report,
-        }
-
-    if query.intent == "user_summary":
-        pseudonym = query.parameters.get("user_pseudonym")
-        row = df[df["user"] == pseudonym]
-        if row.empty:
-            return {"assistant_response": f"No data found for {pseudonym}."}
-        r = row.iloc[0]
-        return {
-            "assistant_response": (
-                f"{pseudonym}: avg drift score {r['avg_drift_score']:.2f}, "
-                f"{int(r['n_flagged_messages'])} of {int(r['n_messages'])} messages flagged "
-                f"({r['flagged_message_rate']*100:.1f}%)."
-            ),
-            "data": r.to_dict(),
-        }
-
-    return {"assistant_response": f"Unrecognized intent '{query.intent}'."}
-
-
-class AskQuery(BaseModel):
-    question: str
-    k: int = 4
-
-
-@router.post("/ask")
-def assistant_ask(query: AskQuery, x_webhook_secret: str = Header(default=None)):
+def write_df(df: pd.DataFrame, table_name: str) -> None:
     """
-    Open-ended RAG endpoint, complementary to /webhook's structured
-    intents above. Where /webhook answers questions about *risk data*
-    ("who's riskiest right now"), /ask answers questions about *how the
-    system itself works* — consent, anonymization, audit logging,
-    architecture — retrieved from this project's own docs/audit log
-    (src/governance/rag.py) rather than the risk data itself. Same auth
-    as /webhook for now; a dashboard-facing UI would sit this behind
-    proper session auth instead of the shared secret.
+    Persists df as `table_name`. If DATABASE_URL is set, writes (replaces)
+    a Neon Postgres table of the same name — this is what the deployed API
+    reads from. Always ALSO writes a local CSV under data/processed/ so
+    local development without Neon keeps working unchanged.
     """
-    _verify_secret(x_webhook_secret)
+    csv_path = DATA_PROCESSED / f"{table_name}.csv"
+    df.to_csv(csv_path, index=False)
+    logger.info(f"Wrote {len(df)} rows to local {csv_path}")
 
-    from src.governance.rag import answer_question
-    result = answer_question(query.question, k=query.k)
-    return {
-        "assistant_response": result["answer"],
-        "sources": result["sources"],
-        "watsonx_generated": result["watsonx_generated"],
-    }
+    engine = _get_engine()
+    if engine is None:
+        return
+    try:
+        df.to_sql(table_name, engine, if_exists="replace", index=False)
+        logger.info(f"Wrote {len(df)} rows to Neon table '{table_name}'.")
+    except Exception as e:
+        logger.warning(
+            f"Failed to write '{table_name}' to Neon ({e}) — local CSV was "
+            "still saved, so local dev is unaffected."
+        )
+
+
+def read_df(table_name: str) -> Optional[pd.DataFrame]:
+    """
+    Reads `table_name`. Tries Neon first if DATABASE_URL is set; falls back
+    to the local CSV under data/processed/ if Neon is unset/unreachable/the
+    table doesn't exist there yet. Returns None if neither source has data
+    (i.e. the pipeline genuinely hasn't been run anywhere yet).
+    """
+    engine = _get_engine()
+    if engine is not None:
+        try:
+            df = pd.read_sql(f'SELECT * FROM "{table_name}"', engine)
+            return df
+        except Exception as e:
+            logger.warning(
+                f"Could not read '{table_name}' from Neon ({e}) — falling "
+                "back to local CSV."
+            )
+
+    csv_path = DATA_PROCESSED / f"{table_name}.csv"
+    if csv_path.exists():
+        return pd.read_csv(csv_path)
+    return None
