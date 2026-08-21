@@ -21,6 +21,7 @@ _append() to do that without touching call sites.
 import json
 import hashlib
 import logging
+import os
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
@@ -30,7 +31,40 @@ from src.config import AUDIT_LOG_PATH
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-AUDIT_LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
+
+def _resolve_writable_log_path(preferred: Path) -> Path:
+    """
+    Serverless deploy targets (Vercel's Python runtime among them) ship the
+    function bundle as a read-only filesystem — only /tmp is writable, and
+    /tmp is ephemeral per invocation/container. `preferred` (the real
+    ROOT_DIR-relative path, fine for local dev / a real container deploy
+    like IBM Code Engine) is used when its parent directory is actually
+    writable; otherwise we fall back to /tmp so log_event() below can
+    always succeed rather than throwing OSError/PermissionError straight
+    through every route that calls it (that was crashing
+    /api/drift/messages and /api/drift/explain with 500s on Vercel,
+    unrelated to watsonx).
+    """
+    try:
+        preferred.parent.mkdir(parents=True, exist_ok=True)
+        probe = preferred.parent / ".write_test"
+        with open(probe, "w") as f:
+            f.write("ok")
+        probe.unlink(missing_ok=True)
+        return preferred
+    except OSError:
+        fallback = Path("/tmp") / preferred.name
+        logger.warning(
+            f"Audit log path {preferred} is not writable in this environment "
+            f"(read-only filesystem, e.g. Vercel serverless) — falling back to "
+            f"{fallback}. Note: /tmp is ephemeral, so this fallback log does not "
+            f"persist across deployments/cold starts. For a durable audit trail "
+            f"in serverless, point AUDIT_LOG_PATH at external storage instead."
+        )
+        return fallback
+
+
+AUDIT_LOG_PATH = _resolve_writable_log_path(AUDIT_LOG_PATH)
 
 
 def _hash_entry(entry: dict) -> str:
@@ -67,8 +101,15 @@ def log_event(event_type: str, user_pseudonym: Optional[str], details: dict,
     }
     entry["entry_hash"] = _hash_entry(entry)
 
-    with open(AUDIT_LOG_PATH, "a") as f:
-        f.write(json.dumps(entry, default=str) + "\n")
+    try:
+        with open(AUDIT_LOG_PATH, "a") as f:
+            f.write(json.dumps(entry, default=str) + "\n")
+    except OSError as e:
+        # Audit logging is important but must never be able to take down the
+        # feature it's logging (drift lookup, explanation, etc.) — a route
+        # returning data to an analyst shouldn't 500 just because the append
+        # failed. Log loudly server-side instead so the gap is visible.
+        logger.error(f"Failed to write audit log entry ({event_type}): {e}")
 
     return entry
 
