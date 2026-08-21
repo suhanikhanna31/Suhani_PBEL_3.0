@@ -10,6 +10,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from src.data.store import read_df
 from src.governance.access_control import get_current_role, check_permission
 from src.governance.audit_log import log_event
+from src.models.watsonx import client as watsonx_client
 from src.models.watsonx.client import explain_drift
 
 logging.basicConfig(level=logging.INFO)
@@ -62,8 +63,29 @@ def get_drift_explanation(pseudonym: str, role: str = Depends(get_current_role))
     log_event("watsonx_explanation_generated", pseudonym,
               {"explanation_generated": explanation is not None}, actor=role)
 
+    if explanation is None:
+        # explain_drift() -> _get_model() never raises (client.py catches
+        # init/call errors internally and returns None), so we can safely
+        # distinguish *why* it's None instead of collapsing both cases into
+        # one misleading "not configured" message.
+        if not watsonx_client.WATSONX_ENABLED:
+            explanation = (
+                "watsonx.ai not configured — set WATSONX_API_KEY/WATSONX_PROJECT_ID in .env."
+            )
+        elif watsonx_client._model_init_failed:
+            explanation = (
+                "watsonx.ai explanation unavailable — the watsonx client failed to "
+                "initialize (check credentials, network access, and the ibm-watsonx-ai "
+                "package). See server logs for details."
+            )
+        else:
+            explanation = (
+                "watsonx.ai explanation unavailable — the model call failed. "
+                "See server logs for details."
+            )
+
     return {
         "user_pseudonym": pseudonym,
         "summary": summary,
-        "explanation": explanation or "watsonx.ai not configured — set WATSONX_API_KEY/WATSONX_PROJECT_ID in .env.",
+        "explanation": explanation,
     }
