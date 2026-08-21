@@ -61,8 +61,15 @@ def _get_model():
 
         credentials = Credentials(url=WATSONX_URL, api_key=WATSONX_API_KEY)
 
-        # Overriding the stuck env config directly here to use the correct instruct model
-        active_model_id = "ibm/granite-3-1-8b-instruct"
+        # Respect the configured WATSONX_MODEL_ID (src/config.py, env-driven)
+        # instead of silently overriding it — this used to hardcode
+        # "ibm/granite-3-1-8b-instruct" here regardless of what was
+        # configured, which broke as soon as that specific model wasn't
+        # enabled/available in the target project's environment (a
+        # deploy-specific model catalog, not something this code should
+        # assume). If that happens now, fail with a clear message pointing
+        # at the fix instead of a model_id 404 buried in a stack trace.
+        active_model_id = WATSONX_MODEL_ID
 
         _model = ModelInference(
             model_id=active_model_id,
@@ -76,7 +83,12 @@ def _get_model():
         # process (e.g. once per request on Vercel) — remember the failure
         # so we fail fast and callers get a clean None immediately.
         _model_init_failed = True
-        logger.error(f"watsonx.ai client initialization failed: {e}")
+        logger.error(
+            f"watsonx.ai client initialization failed (model_id='{WATSONX_MODEL_ID}'): {e}. "
+            "If this is a 'model not supported for this environment' error, set "
+            "WATSONX_MODEL_ID to one of the models actually listed as supported for "
+            "your project (see the 'Supported models' list in the error above)."
+        )
         return None
 
 
