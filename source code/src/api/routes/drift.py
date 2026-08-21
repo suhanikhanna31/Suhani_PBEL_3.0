@@ -7,7 +7,7 @@ import logging
 import pandas as pd
 from fastapi import APIRouter, Depends, HTTPException
 
-from src.config import DATA_PROCESSED
+from src.data.store import read_df
 from src.governance.access_control import get_current_role, check_permission
 from src.governance.audit_log import log_event
 from src.models.watsonx.client import explain_drift
@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 # Columns considered safe to expose via the API — explicitly excludes raw
-# message "content" even though it's present in scored_messages.csv in-process,
+# message "content" even though it's present in scored_messages in-process,
 # reinforcing the "pseudonyms + derived features only" boundary at the API layer.
 EXPOSED_COLUMNS = [
     "user", "date", "drift_score", "n_flagged", "flagged_features",
@@ -27,10 +27,10 @@ EXPOSED_COLUMNS = [
 
 
 def _load_scored_messages() -> pd.DataFrame:
-    path = DATA_PROCESSED / "scored_messages.csv"
-    if not path.exists():
+    df = read_df("scored_messages")
+    if df is None:
         raise HTTPException(status_code=503, detail="Pipeline has not been run yet. Run `python -m src.pipeline`.")
-    return pd.read_csv(path)
+    return df
 
 
 @router.get("/messages/{pseudonym}")
@@ -49,10 +49,9 @@ def get_user_messages(pseudonym: str, role: str = Depends(get_current_role)):
 def get_drift_explanation(pseudonym: str, role: str = Depends(get_current_role)):
     check_permission(role, "view_drift")
 
-    user_risk_path = DATA_PROCESSED / "user_risk.csv"
-    if not user_risk_path.exists():
+    user_risk = read_df("user_risk")
+    if user_risk is None:
         raise HTTPException(status_code=503, detail="Pipeline has not been run yet.")
-    user_risk = pd.read_csv(user_risk_path)
     row = user_risk[user_risk["user"] == pseudonym]
     if row.empty:
         raise HTTPException(status_code=404, detail="User pseudonym not found.")
