@@ -33,9 +33,9 @@ on a flag"):
 import logging
 from typing import Optional
 
-import pandas as pd
 
-from src.config import DATA_PROCESSED, DRIFT_Z_THRESHOLD, WATSONX_ENABLED
+from src.config import DRIFT_Z_THRESHOLD, WATSONX_ENABLED
+from src.data.store import read_df
 from src.governance.audit_log import log_event, get_recent_entries
 from src.governance.rag import retrieve
 from src.models.watsonx.client import explain_drift, _get_model
@@ -62,24 +62,34 @@ ACTIONS = ("escalate_for_manual_review", "continue_monitoring", "no_action_neede
 # ---------------------------------------------------------------------------
 
 def _tool_get_risk_summary(pseudonym: str) -> Optional[dict]:
-    path = DATA_PROCESSED / "user_risk.csv"
-    if not path.exists():
+    """Read user risk through the project's storage abstraction.
+
+    On Vercel this resolves to Neon when DATABASE_URL is configured; during
+    local development it falls back to data/processed/user_risk.csv. Keeping
+    the agent on the same storage path as /api/users and /api/drift prevents
+    serverless requests from looking for a CSV that only exists on a laptop.
+    """
+    df = read_df("user_risk")
+    if df is None or df.empty or "user" not in df.columns:
         return None
-    df = pd.read_csv(path)
     row = df[df["user"] == pseudonym]
     return row.iloc[0].to_dict() if not row.empty else None
 
 
 def _tool_get_recent_messages(pseudonym: str) -> list:
-    path = DATA_PROCESSED / "scored_messages.csv"
-    if not path.exists():
+    """Read recent scored messages through the same storage abstraction."""
+    df = read_df("scored_messages")
+    if df is None or df.empty or "user" not in df.columns:
         return []
-    df = pd.read_csv(path)
+
     user_df = df[df["user"] == pseudonym]
     if user_df.empty:
         return []
-    cols = [c for c in ("date", "drift_score", "n_flagged", "flagged_features",
-                         "sentiment_polarity", "urgency_score") if c in user_df.columns]
+
+    cols = [c for c in (
+        "date", "drift_score", "n_flagged", "flagged_features",
+        "sentiment_polarity", "urgency_score"
+    ) if c in user_df.columns]
     return user_df[cols].tail(RECENT_MESSAGES_LIMIT).to_dict(orient="records")
 
 
