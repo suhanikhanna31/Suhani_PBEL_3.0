@@ -1,0 +1,86 @@
+{
+  "groups": {
+    "avg_word_length": [
+      {
+        "quartile": "Q1",
+        "n_messages": 502,
+        "mean_drift_score": 0.04388884462151394,
+        "flagged_rate": 0.025896414342629483
+      },
+      {
+        "quartile": "Q2",
+        "n_messages": 517,
+        "mean_drift_score": 0.041512185686653776,
+        "flagged_rate": 0.025145067698259187
+      },
+      {
+        "quartile": "Q3",
+        "n_messages": 483,
+        "mean_drift_score": 0.027673706004140788,
+        "flagged_rate": 0.020703933747412008
+      },
+      {
+        "quartile": "Q4",
+        "n_messages": 498,
+        "mean_drift_score": 0.03459096385542169,
+        "flagged_rate": 0.02208835341365462
+      }
+    ],
+    "lexical_diversity": [
+      {
+        "quartile": "Q1",
+        "n_messages": 500,
+        "mean_drift_score": 0.056605600000000006,
+        "flagged_rate": 0.034
+      },
+      {
+        "quartile": "Q2",
+        "n_messages": 505,
+        "mean_drift_score": 0.024082376237623764,
+        "flagged_rate": 0.015841584158415842
+      },
+      {
+        "quartile": "Q3",
+        "n_messages": 995,
+        "mean_drift_score": 0.033791256281407035,
+        "flagged_rate": 0.022110552763819097
+      }
+    ],
+    "readability_flesch": [
+      {
+        "quartile": "Q1",
+        "n_messages": 500,
+        "mean_drift_score": 0.0395526,
+        "flagged_rate": 0.032
+      },
+      {
+        "quartile": "Q2",
+        "n_messages": 502,
+        "mean_drift_score": 0.02024183266932271,
+        "flagged_rate": 0.0099601593625498
+      },
+      {
+        "quartile": "Q3",
+        "n_messages": 500,
+        "mean_drift_score": 0.049588,
+        "flagged_rate": 0.032
+      },
+      {
+        "quartile": "Q4",
+        "n_messages": 498,
+        "mean_drift_score": 0.03886546184738956,
+        "flagged_rate": 0.020080321285140562
+      }
+    ]
+  },
+  "max_to_min_flagged_rate_ratio": {
+    "avg_word_length": 1.251,
+    "lexical_diversity": 2.146,
+    "readability_flesch": 3.213
+  },
+  "proxies_with_disparity_over_1_5x": [
+    "lexical_diversity",
+    "readability_flesch"
+  ],
+  "note": "These are writing-style proxies, not real protected attributes. A ratio flag here means 'go look closer', not 'this is confirmed bias'."
+}

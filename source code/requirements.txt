@@ -1,0 +1,31 @@
+# Core data / numeric
+pandas
+numpy
+
+# NLP and Text Processing
+textstat
+nltk
+textblob
+
+# ML Deployment (Keep core fallback tools)
+scikit-learn
+xgboost
+joblib
+
+# API Framework
+fastapi
+uvicorn[standard]
+pydantic
+python-multipart
+
+# Config / env
+python-dotenv
+
+# Testing
+pytest
+
+# watsonx.ai SDK
+ibm-watsonx-ai
+
+SQLAlchemy
+psycopg2-binary

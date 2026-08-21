@@ -1,0 +1,6 @@
+{
+  "tests/test_agent.py::TestInvestigationAgentFallback::test_unknown_user_returns_error": true,
+  "tests/test_agent.py::TestInvestigationAgentFallback::test_low_drift_recommends_no_action": true,
+  "tests/test_agent.py::TestInvestigationAgentFallback::test_high_drift_recommends_escalation": true,
+  "tests/test_agent.py::TestInvestigationAgentFallback::test_report_never_allows_autonomous_action": true
+}
