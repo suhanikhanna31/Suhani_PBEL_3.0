@@ -22,3 +22,6 @@ python-dotenv
 
 # watsonx.ai SDK
 ibm-watsonx-ai
+
+SQLAlchemy
+psycopg2-binary
