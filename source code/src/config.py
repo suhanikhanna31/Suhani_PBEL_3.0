@@ -19,6 +19,13 @@ DATA_PROCESSED = ROOT_DIR / "data" / "processed"
 for _p in (DATA_RAW, DATA_INTERIM, DATA_PROCESSED):
     _p.mkdir(parents=True, exist_ok=True)
 
+# ---- Database (Neon Postgres) ----
+# When set, ingest.py reads email data from this live Postgres database
+# (the `emails` table) instead of a local data/raw/email.csv file. Leave
+# unset to keep using local CSV / synthetic data as before — this is a
+# fallback chain, not a hard requirement.
+DATABASE_URL = os.getenv("DATABASE_URL", "")
+
 # ---- watsonx.ai ----
 WATSONX_API_KEY = os.getenv("WATSONX_API_KEY", "")
 WATSONX_PROJECT_ID = os.getenv("WATSONX_PROJECT_ID", "")
