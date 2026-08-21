@@ -35,8 +35,7 @@ from typing import Optional
 
 import pandas as pd
 
-from src.config import DRIFT_Z_THRESHOLD, WATSONX_ENABLED
-from src.data.store import read_df
+from src.config import DATA_PROCESSED, DRIFT_Z_THRESHOLD, WATSONX_ENABLED
 from src.governance.audit_log import log_event, get_recent_entries
 from src.governance.rag import retrieve
 from src.models.watsonx.client import explain_drift, _get_model
@@ -63,17 +62,19 @@ ACTIONS = ("escalate_for_manual_review", "continue_monitoring", "no_action_neede
 # ---------------------------------------------------------------------------
 
 def _tool_get_risk_summary(pseudonym: str) -> Optional[dict]:
-    df = read_df("user_risk")
-    if df is None:
+    path = DATA_PROCESSED / "user_risk.csv"
+    if not path.exists():
         return None
+    df = pd.read_csv(path)
     row = df[df["user"] == pseudonym]
     return row.iloc[0].to_dict() if not row.empty else None
 
 
 def _tool_get_recent_messages(pseudonym: str) -> list:
-    df = read_df("scored_messages")
-    if df is None:
+    path = DATA_PROCESSED / "scored_messages.csv"
+    if not path.exists():
         return []
+    df = pd.read_csv(path)
     user_df = df[df["user"] == pseudonym]
     if user_df.empty:
         return []
