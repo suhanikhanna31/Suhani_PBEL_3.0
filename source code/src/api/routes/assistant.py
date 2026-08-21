@@ -10,12 +10,14 @@ Cloud IAM-based service-to-service auth in production.
 import logging
 
 import pandas as pd
-from fastapi import APIRouter, Header, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException
 from pydantic import BaseModel
 
 from src.config import ASSISTANT_WEBHOOK_SECRET, TOP_K_RISKIEST
 from src.data.store import read_df
 from src.dsa.top_k_heap import TopKRiskHeap
+from src.governance.access_control import get_current_role, check_permission
+from src.governance.audit_log import log_event
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -106,6 +108,35 @@ def assistant_ask(query: AskQuery, x_webhook_secret: str = Header(default=None))
 
     from src.governance.rag import answer_question
     result = answer_question(query.question, k=query.k)
+    return {
+        "assistant_response": result["answer"],
+        "sources": result["sources"],
+        "watsonx_generated": result["watsonx_generated"],
+    }
+
+
+@router.post("/dashboard-ask")
+def dashboard_ask(query: AskQuery, role: str = Depends(get_current_role)):
+    """
+    Dashboard-facing counterpart to /ask above, same underlying RAG call
+    but authenticated the same way the rest of the dashboard is (role
+    header via get_current_role/check_permission) instead of the
+    watsonx-Assistant-to-backend webhook secret — the frontend's "Ask
+    about this system" panel calls this route directly from the browser,
+    where there's no shared secret to send. Was previously missing
+    entirely: the frontend called POST /api/assistant/dashboard-ask,
+    nothing matched it, and the request fell through to the StaticFiles
+    catch-all mount (GET/HEAD only) — hence the "Method Not Allowed" the
+    dashboard showed instead of a real answer.
+    """
+    check_permission(role, "ask_assistant")
+
+    from src.governance.rag import answer_question
+    result = answer_question(query.question, k=query.k)
+
+    log_event("dashboard_ask", "n/a",
+              {"question": query.question, "watsonx_generated": result["watsonx_generated"]}, actor=role)
+
     return {
         "assistant_response": result["answer"],
         "sources": result["sources"],
