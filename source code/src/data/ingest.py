@@ -28,7 +28,7 @@ from typing import Optional
 
 import pandas as pd
 
-from src.config import DATA_RAW, MAX_INGEST_ROWS, INGEST_CHUNK_SIZE
+from src.config import DATA_RAW, DATABASE_URL, MAX_INGEST_ROWS, INGEST_CHUNK_SIZE
 from src.data.synthetic_cert_data import generate_synthetic_email_csv
 
 logging.basicConfig(level=logging.INFO)
@@ -37,6 +37,59 @@ logger = logging.getLogger(__name__)
 CANDIDATE_FILENAMES = ["email.csv", "Email.csv", "r4.2-email.csv", "cert_email.csv"]
 
 REQUIRED_COLUMNS = {"id", "date", "user", "pc", "to", "from", "activity", "content"}
+
+# Neon table columns use *_addr / *_code suffixes (user, to, from are
+# reserved words in Postgres), so this maps them back to the CERT schema
+# names the rest of the pipeline expects.
+_NEON_COLUMN_ALIASES = {
+    "user_code": "user",
+    "to_addr": "to",
+    "from_addr": "from",
+}
+
+
+def _load_from_neon(max_rows: int) -> Optional[pd.DataFrame]:
+    """
+    If DATABASE_URL is set (see .env / config.py), pulls a random sample of
+    up to max_rows from the live Neon `emails` table instead of reading a
+    local CSV. Returns None (never raises) if DATABASE_URL is unset or the
+    connection/query fails, so callers can transparently fall back to the
+    local-file / synthetic path below.
+    """
+    if not DATABASE_URL:
+        return None
+
+    try:
+        from sqlalchemy import create_engine, text
+    except ImportError:
+        logger.warning(
+            "DATABASE_URL is set but sqlalchemy/psycopg2-binary aren't installed "
+            "(pip install -r requirements.txt) — falling back to local file/synthetic data."
+        )
+        return None
+
+    try:
+        engine = create_engine(DATABASE_URL)
+        query = text(
+            """
+            SELECT id, date, user_code, pc, to_addr, cc, bcc, from_addr,
+                   size, attachments, content
+            FROM emails
+            ORDER BY random()
+            LIMIT :cap
+            """
+        )
+        with engine.connect() as conn:
+            df = pd.read_sql(query, conn, params={"cap": max_rows})
+        df = df.rename(columns=_NEON_COLUMN_ALIASES)
+        logger.info(f"Loaded {len(df)} rows from Neon Postgres (DATABASE_URL set).")
+        return df
+    except Exception as e:
+        logger.warning(
+            f"DATABASE_URL is set but loading from Neon failed ({e}) — "
+            "falling back to local file/synthetic data."
+        )
+        return None
 
 
 def _find_raw_email_file() -> Optional[Path]:
@@ -119,20 +172,25 @@ def load_email_data(force_synthetic: bool = False,
     MAX_INGEST_ROWS env var, if you have the RAM for more.
     """
     cap = MAX_INGEST_ROWS if max_rows is None else max_rows
-    path = None if force_synthetic else _find_raw_email_file()
 
-    if path is None:
-        logger.warning(
-            "No CERT email.csv found in data/raw/ — generating a synthetic "
-            "dataset with the same schema for development/testing. Drop the "
-            "real dataset (from either Kaggle link) into data/raw/ to use "
-            "real data instead."
-        )
-        path = generate_synthetic_email_csv()
-        df = pd.read_csv(path)
-    else:
-        logger.info(f"Loading CERT email data from {path} (streaming, cap={cap} rows)")
-        df = _reservoir_sample_csv(path, max_rows=cap, chunk_size=INGEST_CHUNK_SIZE)
+    df = None if force_synthetic else _load_from_neon(max_rows=cap)
+
+    if df is None:
+        path = None if force_synthetic else _find_raw_email_file()
+
+        if path is None:
+            logger.warning(
+                "No DATABASE_URL set and no CERT email.csv found in data/raw/ — "
+                "generating a synthetic dataset with the same schema for "
+                "development/testing. Set DATABASE_URL to your Neon connection "
+                "string, or drop the real dataset into data/raw/, to use real "
+                "data instead."
+            )
+            path = generate_synthetic_email_csv()
+            df = pd.read_csv(path)
+        else:
+            logger.info(f"Loading CERT email data from {path} (streaming, cap={cap} rows)")
+            df = _reservoir_sample_csv(path, max_rows=cap, chunk_size=INGEST_CHUNK_SIZE)
 
     # Some real-world CERT mirrors drop the `activity` column (it's not
     # used by any feature extractor here, only kept for schema parity), so
