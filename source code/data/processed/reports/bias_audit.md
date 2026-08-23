@@ -1,26 +1,26 @@
 # Bias / fairness audit (writing-style proxies)
 
-**Flagged for closer review:** lexical_diversity, readability_flesch (flagged-rate ratio >= 1.5x between highest and lowest quartile).
+No proxy showed a >=1.5x disparity in flagged rate across quartiles on this run.
 
 ## avg_word_length
 | Quartile | n messages | mean drift score | flagged rate |
 |---|---|---|---|
-| Q1 | 502 | 0.044 | 0.026 |
-| Q2 | 517 | 0.042 | 0.025 |
-| Q3 | 483 | 0.028 | 0.021 |
-| Q4 | 498 | 0.035 | 0.022 |
+| Q1 | 1065 | 0.004 | 0.001 |
+| Q2 | 1050 | 0.005 | 0.001 |
+| Q3 | 1017 | 0.006 | 0.000 |
+| Q4 | 1043 | 0.004 | 0.001 |
 
 ## lexical_diversity
 | Quartile | n messages | mean drift score | flagged rate |
 |---|---|---|---|
-| Q1 | 500 | 0.057 | 0.034 |
-| Q2 | 505 | 0.024 | 0.016 |
-| Q3 | 995 | 0.034 | 0.022 |
+| Q1 | 1066 | 0.007 | 0.002 |
+| Q2 | 1066 | 0.002 | 0.001 |
+| Q3 | 2043 | 0.004 | 0.000 |
 
 ## readability_flesch
 | Quartile | n messages | mean drift score | flagged rate |
 |---|---|---|---|
-| Q1 | 500 | 0.040 | 0.032 |
-| Q2 | 502 | 0.020 | 0.010 |
-| Q3 | 500 | 0.050 | 0.032 |
-| Q4 | 498 | 0.039 | 0.020 |
+| Q1 | 1045 | 0.003 | 0.000 |
+| Q2 | 1045 | 0.006 | 0.003 |
+| Q3 | 1041 | 0.004 | 0.000 |
+| Q4 | 1044 | 0.005 | 0.000 |

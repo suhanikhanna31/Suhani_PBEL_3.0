@@ -3,84 +3,77 @@
     "avg_word_length": [
       {
         "quartile": "Q1",
-        "n_messages": 502,
-        "mean_drift_score": 0.04388884462151394,
-        "flagged_rate": 0.025896414342629483
+        "n_messages": 1065,
+        "mean_drift_score": 0.00364056338028169,
+        "flagged_rate": 0.0009389671361502347
       },
       {
         "quartile": "Q2",
-        "n_messages": 517,
-        "mean_drift_score": 0.041512185686653776,
-        "flagged_rate": 0.025145067698259187
+        "n_messages": 1050,
+        "mean_drift_score": 0.004652571428571429,
+        "flagged_rate": 0.0009523809523809524
       },
       {
         "quartile": "Q3",
-        "n_messages": 483,
-        "mean_drift_score": 0.027673706004140788,
-        "flagged_rate": 0.020703933747412008
+        "n_messages": 1017,
+        "mean_drift_score": 0.0055687315634218295,
+        "flagged_rate": 0.0
       },
       {
         "quartile": "Q4",
-        "n_messages": 498,
-        "mean_drift_score": 0.03459096385542169,
-        "flagged_rate": 0.02208835341365462
+        "n_messages": 1043,
+        "mean_drift_score": 0.0036836049856184085,
+        "flagged_rate": 0.0009587727708533077
       }
     ],
     "lexical_diversity": [
       {
         "quartile": "Q1",
-        "n_messages": 500,
-        "mean_drift_score": 0.056605600000000006,
-        "flagged_rate": 0.034
+        "n_messages": 1066,
+        "mean_drift_score": 0.006736397748592871,
+        "flagged_rate": 0.001876172607879925
       },
       {
         "quartile": "Q2",
-        "n_messages": 505,
-        "mean_drift_score": 0.024082376237623764,
-        "flagged_rate": 0.015841584158415842
+        "n_messages": 1066,
+        "mean_drift_score": 0.001972795497185741,
+        "flagged_rate": 0.0009380863039399625
       },
       {
         "quartile": "Q3",
-        "n_messages": 995,
-        "mean_drift_score": 0.033791256281407035,
-        "flagged_rate": 0.022110552763819097
+        "n_messages": 2043,
+        "mean_drift_score": 0.004397356828193833,
+        "flagged_rate": 0.0
       }
     ],
     "readability_flesch": [
       {
         "quartile": "Q1",
-        "n_messages": 500,
-        "mean_drift_score": 0.0395526,
-        "flagged_rate": 0.032
+        "n_messages": 1045,
+        "mean_drift_score": 0.003164976076555024,
+        "flagged_rate": 0.0
       },
       {
         "quartile": "Q2",
-        "n_messages": 502,
-        "mean_drift_score": 0.02024183266932271,
-        "flagged_rate": 0.0099601593625498
+        "n_messages": 1045,
+        "mean_drift_score": 0.005859712918660287,
+        "flagged_rate": 0.0028708133971291866
       },
       {
         "quartile": "Q3",
-        "n_messages": 500,
-        "mean_drift_score": 0.049588,
-        "flagged_rate": 0.032
+        "n_messages": 1041,
+        "mean_drift_score": 0.0038655139289145053,
+        "flagged_rate": 0.0
       },
       {
         "quartile": "Q4",
-        "n_messages": 498,
-        "mean_drift_score": 0.03886546184738956,
-        "flagged_rate": 0.020080321285140562
+        "n_messages": 1044,
+        "mean_drift_score": 0.004610153256704981,
+        "flagged_rate": 0.0
       }
     ]
   },
-  "max_to_min_flagged_rate_ratio": {
-    "avg_word_length": 1.251,
-    "lexical_diversity": 2.146,
-    "readability_flesch": 3.213
-  },
-  "proxies_with_disparity_over_1_5x": [
-    "lexical_diversity",
-    "readability_flesch"
-  ],
+  "max_to_min_flagged_rate_ratio": {},
+  "proxies_with_disparity_over_1_5x": [],
   "note": "These are writing-style proxies, not real protected attributes. A ratio flag here means 'go look closer', not 'this is confirmed bias'."
 }
