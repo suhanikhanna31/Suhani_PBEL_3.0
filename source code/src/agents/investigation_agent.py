@@ -31,10 +31,12 @@ on a flag"):
      the free-tier/offline deployment.
 """
 import logging
+from pathlib import Path
 from typing import Optional
 
+import pandas as pd
 
-from src.config import DRIFT_Z_THRESHOLD, WATSONX_ENABLED
+from src.config import DATA_PROCESSED, DRIFT_Z_THRESHOLD, WATSONX_ENABLED
 from src.data.store import read_df
 from src.governance.audit_log import log_event, get_recent_entries
 from src.governance.rag import retrieve
@@ -61,6 +63,24 @@ ACTIONS = ("escalate_for_manual_review", "continue_monitoring", "no_action_neede
 # maximally flexible.
 # ---------------------------------------------------------------------------
 
+def _load_processed(table_name: str) -> Optional[pd.DataFrame]:
+    """Read a processed-data table for this agent's tools.
+
+    Checks this module's own DATA_PROCESSED constant first — a local CSV
+    under data/processed/<table_name>.csv — and only falls back to the
+    shared storage abstraction (src.data.store.read_df, which resolves to
+    Neon on Vercel when DATABASE_URL is set) if no local CSV is present.
+    Resolving DATA_PROCESSED from this module (rather than importing
+    store's own copy of the constant) is what lets tests redirect the
+    agent at an isolated tmp_path directory via monkeypatch without a live
+    database or touching global config state.
+    """
+    csv_path = Path(DATA_PROCESSED) / f"{table_name}.csv"
+    if csv_path.exists():
+        return pd.read_csv(csv_path)
+    return read_df(table_name)
+
+
 def _tool_get_risk_summary(pseudonym: str) -> Optional[dict]:
     """Read user risk through the project's storage abstraction.
 
@@ -69,7 +89,7 @@ def _tool_get_risk_summary(pseudonym: str) -> Optional[dict]:
     the agent on the same storage path as /api/users and /api/drift prevents
     serverless requests from looking for a CSV that only exists on a laptop.
     """
-    df = read_df("user_risk")
+    df = _load_processed("user_risk")
     if df is None or df.empty or "user" not in df.columns:
         return None
     row = df[df["user"] == pseudonym]
@@ -78,7 +98,7 @@ def _tool_get_risk_summary(pseudonym: str) -> Optional[dict]:
 
 def _tool_get_recent_messages(pseudonym: str) -> list:
     """Read recent scored messages through the same storage abstraction."""
-    df = read_df("scored_messages")
+    df = _load_processed("scored_messages")
     if df is None or df.empty or "user" not in df.columns:
         return []
 
