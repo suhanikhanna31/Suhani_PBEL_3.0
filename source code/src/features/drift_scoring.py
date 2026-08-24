@@ -87,6 +87,44 @@ def score_drift(z_row: Dict[str, float]) -> dict:
     return {"drift_score": drift_score, "flagged_features": flagged, "n_flagged": len(flagged)}
 
 
+def feature_contributions(z_row: Dict[str, float]) -> List[dict]:
+    """
+    Same weighted-|z| math as score_drift() above, but returns the
+    per-feature breakdown instead of collapsing it into one number —
+    this is what makes the drift score auditable rather than a black box:
+    every feature's exact share of a given score, not just the total.
+
+    Returns a list of {feature, z, weight, contribution_pct}, sorted by
+    contribution_pct descending. contribution_pct values sum to ~100 (modulo
+    rounding) and are computed with the exact same clipped/weighted terms
+    score_drift() uses, so they always explain the *actual* displayed
+    drift_score for that row — never an approximation of it.
+    """
+    if not z_row:
+        return []
+
+    terms = []
+    weighted_total = 0.0
+    for feat, z in z_row.items():
+        if pd.isna(z):
+            continue
+        w = FEATURE_WEIGHTS.get(feat, 1.0)
+        clipped_z = min(abs(z), MAX_ABS_Z)
+        weighted = w * clipped_z
+        weighted_total += weighted
+        terms.append({"feature": feat.replace("z_", ""), "z": round(float(z), 3), "weight": float(w), "_weighted": float(weighted)})
+
+    if weighted_total <= 0:
+        return [{"feature": t["feature"], "z": t["z"], "weight": t["weight"], "contribution_pct": 0.0} for t in terms]
+
+    out = []
+    for t in terms:
+        pct = round(100 * t["_weighted"] / weighted_total, 1)
+        out.append({"feature": t["feature"], "z": t["z"], "weight": t["weight"], "contribution_pct": float(pct)})
+    out.sort(key=lambda t: t["contribution_pct"], reverse=True)
+    return out
+
+
 def score_drift_df(z_df: pd.DataFrame) -> pd.DataFrame:
     """Apply score_drift row-wise across a DataFrame that already has z_* columns."""
     z_cols = [c for c in z_df.columns if c.startswith("z_")]

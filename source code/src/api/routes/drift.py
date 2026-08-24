@@ -8,6 +8,7 @@ import pandas as pd
 from fastapi import APIRouter, Depends, HTTPException
 
 from src.data.store import read_df
+from src.features.drift_scoring import feature_contributions
 from src.governance.access_control import get_current_role, check_permission
 from src.governance.audit_log import log_event
 from src.models.watsonx import client as watsonx_client
@@ -91,4 +92,44 @@ def get_drift_explanation(pseudonym: str, role: str = Depends(get_current_role))
         "user_pseudonym": pseudonym,
         "summary": summary,
         "explanation": explanation,
+    }
+
+
+@router.get("/attribution/{pseudonym}")
+def get_feature_attribution(pseudonym: str, role: str = Depends(get_current_role)):
+    """
+    Deterministic, auditable breakdown of *why* this user's drift score is
+    what it is — each of the ~11 weighted z-score features and its exact
+    share of the score shown in the table, computed with the same math
+    src/features/drift_scoring.score_drift() uses (not an approximation,
+    not an LLM call — this is the rule-based layer the watsonx.ai
+    explanation in /explain sits on top of, and it stays correct even when
+    watsonx.ai isn't configured).
+
+    Uses the message with this user's single highest drift_score (their
+    most-flagged instance) as the explained example, rather than averaging
+    across their history, so the breakdown corresponds to one concrete,
+    inspectable data point — the same framing as an instance-level SHAP
+    explanation.
+    """
+    check_permission(role, "view_drift")
+    df = _load_scored_messages()
+    user_df = df[df["user"] == pseudonym]
+    if user_df.empty:
+        raise HTTPException(status_code=404, detail="No scored messages for this pseudonym.")
+
+    z_cols = [c for c in user_df.columns if c.startswith("z_")]
+    if not z_cols:
+        return {"user_pseudonym": pseudonym, "date": None, "drift_score": 0.0, "contributions": []}
+
+    peak_row = user_df.loc[user_df["drift_score"].idxmax()]
+    z_row = {c: peak_row[c] for c in z_cols}
+    contributions = feature_contributions(z_row)
+
+    log_event("api_access", pseudonym, {"endpoint": "get_feature_attribution"}, actor=role)
+    return {
+        "user_pseudonym": pseudonym,
+        "date": str(peak_row.get("date", "")),
+        "drift_score": round(float(peak_row["drift_score"]), 4),
+        "contributions": contributions,
     }

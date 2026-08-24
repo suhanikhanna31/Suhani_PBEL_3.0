@@ -264,6 +264,18 @@
   .ask-panel .ask-row{display:flex; gap:10px; align-items:flex-start; margin-bottom:12px;}
   .ask-panel .ask-row .btn{flex:0 0 auto; align-self:flex-start;}
   .ask-answer{background:var(--surface-2); border-left:3px solid var(--green); padding:14px 16px; font-size:13px; color:var(--text); white-space:pre-wrap; display:none;}
+  .admin-locked{color:var(--text-muted); font-size:13px; padding:18px; border:1px dashed var(--border); text-align:center;}
+  .admin-tools{display:grid; grid-template-columns:1fr 1fr; gap:20px;}
+  @media (max-width:820px){ .admin-tools{grid-template-columns:1fr;} }
+  .admin-tool{border:1px solid var(--border); padding:18px;}
+  .admin-tool h3{font-size:13px; text-transform:uppercase; letter-spacing:0.06em; color:var(--text-bright); margin:0 0 6px;}
+  .admin-tool p.desc{font-size:12px; color:var(--text-muted); margin:0 0 14px;}
+  .admin-tool input[type="text"]{width:100%; padding:10px 12px; border:1px solid var(--border); background:var(--bg); font-family:var(--mono); font-size:13px; color:var(--text); margin-bottom:10px;}
+  .admin-tool input[type="text"]:focus{outline:1px solid var(--green); outline-offset:-1px;}
+  .admin-tool-result{margin-top:12px; font-size:12px; padding:10px 12px; border-left:3px solid var(--border-bright); background:var(--surface-2); display:none; white-space:pre-wrap;}
+  .admin-tool-result.show{display:block;}
+  .admin-tool-result.ok{border-left-color:var(--green); color:var(--text);}
+  .admin-tool-result.bad{border-left-color:var(--red); color:var(--text);}
   .ask-sources{margin-top:10px; display:flex; flex-wrap:wrap; gap:6px;}
   .source-chip{font-size:10px; color:var(--green); border:1px solid var(--green-dim); padding:2px 7px;}
   .ask-suggestions{display:flex; flex-wrap:wrap; gap:8px; margin-bottom:12px;}
@@ -811,6 +823,13 @@
           </div>
           <div class="label" style="font-size:11px; color:var(--text-muted); text-transform:uppercase; margin-bottom:6px;">Recently flagged features</div>
           <div class="flag-list" id="d-flags"></div>
+
+          <div class="explanation-box" id="attribution-box" style="border-left-color:var(--amber);">
+            <div class="src">Feature attribution — deterministic, not an LLM call <span class="signal-tag" style="color:var(--amber); border-color:var(--amber);">Explainability</span></div>
+            <div id="attribution-caption" style="font-size:11px; color:var(--text-muted); margin-bottom:10px;">Loading…</div>
+            <div id="attribution-chart-wrap" style="height:220px;"><canvas id="attribution-chart"></canvas></div>
+          </div>
+
           <div class="explanation-box">
             <div class="src">watsonx.ai — plain-language summary</div>
             <div id="d-explanation">Loading explanation…</div>
@@ -829,6 +848,14 @@
         </div>
       </div>
     </div>
+  </section>
+
+  <section class="panel" id="admin-panel">
+    <div class="panel-head">
+      <h2>Governance &amp; admin tools</h2>
+      <span class="hint">Gated to the <code>admin</code> role — analysts can view drift/risk data but cannot revoke consent or inspect raw audit-log internals.</span>
+    </div>
+    <div class="panel-body" id="admin-panel-body" style="padding:24px;"></div>
   </section>
 
   <section class="panel ask-panel" id="ask-panel">
@@ -1406,6 +1433,93 @@
     document.getElementById('pipeline-status').textContent = text;
   }
 
+  // ---- admin-only governance tools (audit-log verify, consent revoke) ----
+  // Mirrors src/api/routes/governance.py's role gate: these two backend
+  // routes have always required the 'admin' role via check_permission(),
+  // but no frontend ever called them beyond a placeholder alert() for the
+  // audit-log link. This renders real panels when role-select is admin,
+  // and a locked notice otherwise, so the admin/analyst distinction is
+  // actually visible in the dashboard rather than only enforced server-side.
+  function isAdminRole() {
+    return document.getElementById('role-select').value === 'dev-admin-token';
+  }
+
+  function adminToolResult(el, ok, text) {
+    el.textContent = text;
+    el.className = 'admin-tool-result show ' + (ok ? 'ok' : 'bad');
+  }
+
+  function renderAdminPanel() {
+    const body = document.getElementById('admin-panel-body');
+    if (!isAdminRole()) {
+      body.innerHTML = '<div class="admin-locked">Switch the role selector above to <strong>admin</strong> to access consent revocation and audit-log verification.</div>';
+      return;
+    }
+    body.innerHTML = `
+      <div class="admin-tools">
+        <div class="admin-tool">
+          <h3>Verify audit log</h3>
+          <p class="desc">Walks the hash-chained audit log (GET /api/governance/audit-log/verify) and confirms no entry has been altered or removed since it was written.</p>
+          <button type="button" class="btn ghost" id="verify-audit-btn">Verify chain</button>
+          <div class="admin-tool-result" id="verify-audit-result"></div>
+        </div>
+        <div class="admin-tool">
+          <h3>Revoke user consent</h3>
+          <p class="desc">Revokes a user's consent by their raw identifier (POST /api/governance/consent/revoke). Consent is tracked pre-pseudonymization, so this is the one place the raw username is used on purpose.</p>
+          <input type="text" id="revoke-user-input" placeholder="raw username, e.g. jsmith2">
+          <button type="button" class="btn ghost" id="revoke-consent-btn">Revoke consent</button>
+          <div class="admin-tool-result" id="revoke-consent-result"></div>
+        </div>
+      </div>
+    `;
+    document.getElementById('verify-audit-btn').addEventListener('click', verifyAuditLog);
+    document.getElementById('revoke-consent-btn').addEventListener('click', revokeConsent);
+  }
+
+  async function verifyAuditLog() {
+    const btn = document.getElementById('verify-audit-btn');
+    const resultEl = document.getElementById('verify-audit-result');
+    btn.disabled = true;
+    try {
+      const res = await fetchJSON(`${API_BASE}/governance/audit-log/verify`);
+      adminToolResult(resultEl, res.chain_valid, res.chain_valid
+        ? 'Chain valid — no tampering detected in the audit log.'
+        : 'Chain INVALID — the audit log may have been altered. Investigate immediately.');
+    } catch (e) {
+      adminToolResult(resultEl, false, `Error: ${e.message}`);
+    } finally {
+      btn.disabled = false;
+    }
+  }
+
+  async function revokeConsent() {
+    const input = document.getElementById('revoke-user-input');
+    const btn = document.getElementById('revoke-consent-btn');
+    const resultEl = document.getElementById('revoke-consent-result');
+    const userId = input.value.trim();
+    if (!userId) {
+      adminToolResult(resultEl, false, 'Enter a raw username first.');
+      return;
+    }
+    if (!confirm(`Revoke consent for "${userId}"? This affects future pipeline runs and cannot be undone from this panel.`)) {
+      return;
+    }
+    btn.disabled = true;
+    try {
+      const res = await fetchJSON(`${API_BASE}/governance/consent/revoke`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ user_raw_identifier: userId }),
+      });
+      adminToolResult(resultEl, true, `Status: ${res.status}. ${res.note || ''}`);
+      input.value = '';
+    } catch (e) {
+      adminToolResult(resultEl, false, `Error: ${e.message}`);
+    } finally {
+      btn.disabled = false;
+    }
+  }
+
   // ---- org-wide monitoring banner (context-aware alert suppression) ----
 
   async function loadOrgBanner() {
@@ -1557,6 +1671,7 @@
   // ---- detail panel ----
 
   let chartInstance = null;
+  let attributionChartInstance = null;
 
   function sentimentBadge(polarity) {
     if (polarity === undefined || polarity === null) return '<span class="badge neu">n/a</span>';
@@ -1597,6 +1712,7 @@
     document.getElementById('d-trend').innerHTML = trendBadge(user);
     document.getElementById('d-cohort').innerHTML = escalationBadge(user);
     document.getElementById('d-explanation').textContent = 'Loading explanation…';
+    document.getElementById('attribution-caption').textContent = 'Loading…';
     document.getElementById('d-flags').innerHTML = '';
     document.getElementById('msg-table-body').innerHTML = '';
     document.getElementById('agent-result').style.display = 'none';
@@ -1626,6 +1742,13 @@
       document.getElementById('d-explanation').textContent = explain.explanation;
     } catch (e) {
       document.getElementById('d-explanation').textContent = 'watsonx.ai explanation unavailable.';
+    }
+
+    try {
+      const attribution = await fetchJSON(`${API_BASE}/drift/attribution/${user.user_pseudonym}`);
+      renderAttributionChart(attribution);
+    } catch (e) {
+      document.getElementById('attribution-caption').textContent = 'Could not load feature attribution.';
     }
   }
 
@@ -1701,6 +1824,59 @@
     });
   }
 
+  // ---- feature attribution (deterministic explainability, no LLM) ----
+  // Renders the exact weighted-|z| breakdown behind a user's peak drift
+  // score — see feature_contributions() in src/features/drift_scoring.py.
+  // Bars sum to ~100%, so this always accounts for the entire score shown
+  // in the risk table, not a subset of "top features".
+  function renderAttributionChart(attribution) {
+    const caption = document.getElementById('attribution-caption');
+    const contributions = attribution.contributions || [];
+    if (!contributions.length) {
+      caption.textContent = 'Not enough message history yet to attribute this score.';
+      if (attributionChartInstance) { attributionChartInstance.destroy(); attributionChartInstance = null; }
+      return;
+    }
+    caption.textContent = `Breakdown of drift score ${fmt(attribution.drift_score)} on ${attribution.date || 'their most-flagged message'} — each bar is that feature's exact share, weighted the same way the score itself is computed.`;
+
+    const ctx = document.getElementById('attribution-chart').getContext('2d');
+    const top = contributions.slice(0, 8);
+    if (attributionChartInstance) attributionChartInstance.destroy();
+    attributionChartInstance = new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels: top.map(c => c.feature.replace(/_/g, ' ')),
+        datasets: [{
+          label: 'Contribution to drift score',
+          data: top.map(c => c.contribution_pct),
+          backgroundColor: 'rgba(255,203,71,0.55)',
+          borderColor: '#ffcb47',
+          borderWidth: 1,
+        }]
+      },
+      options: {
+        indexAxis: 'y',
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            callbacks: {
+              label: (item) => {
+                const c = top[item.dataIndex];
+                return `${c.contribution_pct}% (z=${c.z}, weight=${c.weight})`;
+              }
+            }
+          }
+        },
+        scales: {
+          x: { grid: { color: 'rgba(121,255,176,0.08)' }, ticks: { color: '#4f8a68', font: { family: 'IBM Plex Mono', size: 10 }, callback: (v) => v + '%' } },
+          y: { grid: { display: false }, ticks: { color: '#c9ffd8', font: { family: 'IBM Plex Mono', size: 11 } } }
+        }
+      }
+    });
+  }
+
   // ---- ask panel (RAG) ----
 
   async function runAsk(question) {
@@ -1755,7 +1931,7 @@
   document.getElementById('escalation-filter').addEventListener('change', applyFiltersAndRender);
   document.getElementById('refresh-btn').addEventListener('click', () => loadDashboard());
   document.getElementById('run-agent-btn').addEventListener('click', runAgentInvestigation);
-  document.getElementById('role-select').addEventListener('change', () => loadDashboard());
+  document.getElementById('role-select').addEventListener('change', () => { loadDashboard(); renderAdminPanel(); });
 
   document.querySelectorAll('thead th[data-sort]').forEach(th => {
     th.addEventListener('click', () => {
@@ -1779,6 +1955,7 @@
   });
 
   loadDashboard();
+  renderAdminPanel();
 </script>
 
 </body>
