@@ -4,7 +4,7 @@
 
 Built for an IBM internship using watsonx.ai, watsonx Assistant, and watsonx.governance, with a full supervised + unsupervised ML pipeline, custom-optimized data structures, and a privacy-first design throughout.
 
-**🔗 Live demo:** **[suhani-pbel-3-0-ffz4.vercel.app](https://suhani-pbel-3-0-ffz4.vercel.app)** — deployed on Vercel's free tier. First load after idle can take ~30–60s to spin back up; see [Deployment status](#deployment-status) for the one deliberate trade-off made to fit the NLP stack into 512MB of RAM.
+**🔗 Live demo:** **[suhani-pbel-3-0-ffz4.vercel.app](https://suhani-pbel-3-0-ffz4.vercel.app)** — deployed on Vercel's free tier ; see [Deployment status](#deployment-status) for the one deliberate trade-off made to fit the NLP stack into 512MB of RAM.
 
 ---
 > **Quick start:** `pip install -r requirements.txt && uvicorn src.api.app:app --reload` → open http://localhost:8000 (or just open the live demo above — no setup needed)
